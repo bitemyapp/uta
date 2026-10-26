@@ -11,7 +11,7 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|a| a == "--help" || a == "-h") {
         println!(
-            "Uta — native YouTube Music for Aizome\n\nUsage: aizome-uta [SEARCH WORDS]\n       aizome-uta --demo\n       aizome-uta --version\n\nConnect your browser from the Account screen; no API credentials are required."
+            "Uta — native YouTube Music for Aizome\n\nUsage: aizome-uta [SEARCH WORDS | YOUTUBE MUSIC LINK]\n       aizome-uta --demo\n       aizome-uta --version\n\nA song link plays it; a playlist or album link opens it.\nConnect your account from the Account screen: Uta finds the browser you're\nsigned in with. No API credentials are required."
         );
         return;
     }

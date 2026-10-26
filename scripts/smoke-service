@@ -27,3 +27,6 @@ stream = call(op="resolve", id=song["id"])["stream"]
 assert urlsplit(stream["url"]).scheme == "https"
 assert not stream["authenticated"]
 print(f"Playback: {stream['codec']}, {stream['bitrate']:.0f} kbps; HTTPS stream resolved")
+radio = call(op="watch", id=song["id"], radio=True)["tracks"]
+assert len(radio) > 5 and all(t["duration"] > 0 for t in radio[:5]), "Radio returned too few songs"
+print(f"Radio: {len(radio)} songs, starting with {radio[0]['title']} — {radio[0]['artists']}")

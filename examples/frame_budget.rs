@@ -8,10 +8,15 @@ use aizome_uta::{
 use std::{sync::Arc, time::Instant};
 
 fn main() {
+    // The song count, 200 by default; library lists hold up to 1000.
+    let count: usize = std::env::args()
+        .nth(1)
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(200);
     let mut h = Harness::new(Uta::new(Arc::new(Demo), None, true));
     let w = h.window();
     let songs = demo_tracks();
-    h.program_mut().tracks = (0..200)
+    h.program_mut().tracks = (0..count)
         .map(|i| {
             let mut track = songs[i % songs.len()].clone();
             track.id = format!("demo{i:07}");
@@ -36,7 +41,7 @@ fn main() {
     }
     samples.sort();
     println!(
-        "200-song view; update, layout, damage rasterization: p50={}µs p99={}µs",
+        "{count}-song view; update, layout, damage rasterization: p50={}µs p99={}µs",
         samples[60], samples[118]
     );
 }

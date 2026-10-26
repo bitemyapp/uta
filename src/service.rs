@@ -1,4 +1,4 @@
-use crate::model::{Collection, Stream, Track};
+use crate::model::{Collection, Source, Stream, Track};
 use serde::{Deserialize, Serialize};
 use std::{
     io::{Read, Write},
@@ -7,18 +7,56 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// Text that may hold a session's cookies: sent to the helper, never printed.
+#[derive(Clone, Serialize)]
+#[serde(transparent)]
+pub struct Secret(pub String);
+
+impl std::fmt::Debug for Secret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Secret({} bytes)", self.0.len())
+    }
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Request {
     Status,
-    Connect { browser: String, profile: String },
+    /// Look through the browsers' profiles for YouTube sign-ins.
+    Discover,
+    /// Connect with a profile from `Discover`, or `folder:<path>`.
+    Connect {
+        source: String,
+    },
+    /// Connect with a request or cookies.txt copied from a browser.
+    ConnectText {
+        text: Secret,
+    },
     Disconnect,
-    Search { query: String, filter: String },
+    Search {
+        query: String,
+        filter: String,
+    },
     Liked,
     Playlists,
-    Collection { id: String, kind: String },
-    Resolve { id: String },
-    Rate { id: String, like: bool },
+    Albums,
+    History,
+    Collection {
+        id: String,
+        kind: String,
+    },
+    /// A song's "up next" list, or a radio from it.
+    Watch {
+        id: String,
+        radio: bool,
+    },
+    Resolve {
+        id: String,
+    },
+    Rate {
+        id: String,
+        like: bool,
+    },
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -27,6 +65,12 @@ pub struct Reply {
     pub connected: bool,
     pub account: String,
     pub message: String,
+    /// Where the saved session came from, and its identity to reconnect with.
+    pub source: String,
+    pub source_id: String,
+    pub sources: Vec<Source>,
+    /// The service's clock when it answered, for "used 5 minutes ago".
+    pub now: f64,
     pub title: String,
     pub tracks: Vec<Track>,
     pub collections: Vec<Collection>,
@@ -40,6 +84,12 @@ pub trait Service: Send + Sync {
     }
 }
 
+/// The most songs the helper returns for a library list or collection.
+pub const SONG_LIMIT: usize = 1000;
+
+/// The largest request the helper reads; pasted cookies are the large ones.
+pub const REQUEST_LIMIT: usize = 1024 * 1024;
+
 pub struct Live;
 
 impl Service for Live {
@@ -47,13 +97,21 @@ impl Service for Live {
         let python = std::env::var_os("UTA_PYTHON").unwrap_or_else(|| "python3".into());
         let mut command = Command::new(python);
         crate::process::kill_with_parent(&mut command);
-        let mut child = command
-            .args(["-c", include_str!("../service/uta_service.py")])
-            .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null())
-            .spawn().map_err(|_| "Could not start the music service. Run Uta through its Nix package or development shell.")?;
         let mut request = serde_json::to_value(&request).map_err(|_| "Could not encode request")?;
         request["authenticated"] = authenticated.into();
         let input = serde_json::to_vec(&request).map_err(|_| "Could not encode request")?;
+        if input.len() > REQUEST_LIMIT {
+            return Err("That is too much to send to the music service.".into());
+        }
+        let mut child = command
+            .args(["-c", include_str!("../service/uta_service.py")])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(|_| {
+                "Could not start the music service. Run Uta through its Nix package or development shell."
+            })?;
         let sent = child
             .stdin
             .take()
@@ -112,7 +170,8 @@ impl Service for Live {
     }
 }
 
-/// Explicitly selected demo data; it never contacts YouTube or the keyring.
+/// Explicitly selected demo data; it never contacts YouTube, the keyring or
+/// a browser.
 pub struct Demo;
 
 impl Service for Demo {
@@ -122,12 +181,21 @@ impl Service for Demo {
     fn call(&self, request: Request, _authenticated: bool) -> Result<Reply, String> {
         match request {
             Request::Status => Ok(Reply::default()),
-            Request::Search { .. } | Request::Liked | Request::Collection { .. } => Ok(Reply {
+            Request::Discover => Ok(Reply {
+                sources: demo_sources(),
+                now: DEMO_NOW,
+                ..Reply::default()
+            }),
+            Request::Search { .. }
+            | Request::Liked
+            | Request::History
+            | Request::Collection { .. }
+            | Request::Watch { .. } => Ok(Reply {
                 title: "Evening listening".into(),
                 tracks: demo_tracks(),
                 ..Reply::default()
             }),
-            Request::Playlists => Ok(Reply {
+            Request::Playlists | Request::Albums => Ok(Reply {
                 collections: vec![Collection {
                     id: "demo".into(),
                     title: "Evening listening".into(),
@@ -142,6 +210,35 @@ impl Service for Demo {
             _ => Err("Account actions are unavailable in demo mode.".into()),
         }
     }
+}
+
+/// A fixed clock for the demo's fictional browsers, so its pictures don't age.
+pub const DEMO_NOW: f64 = 1_793_000_000.0;
+
+pub fn demo_sources() -> Vec<Source> {
+    vec![
+        Source {
+            id: "chromium:demo".into(),
+            browser: "Chromium".into(),
+            profile: "Person 1".into(),
+            signed_in: true,
+            used: DEMO_NOW - 240.0,
+        },
+        Source {
+            id: "gecko:demo".into(),
+            browser: "Firefox".into(),
+            profile: "default-release".into(),
+            signed_in: true,
+            used: DEMO_NOW - 86400.0 * 3.0,
+        },
+        Source {
+            id: "gecko:demo-work".into(),
+            browser: "Firefox".into(),
+            profile: "work".into(),
+            signed_in: false,
+            used: 0.0,
+        },
+    ]
 }
 
 pub fn demo_tracks() -> Vec<Track> {

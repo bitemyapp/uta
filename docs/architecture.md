@@ -30,12 +30,47 @@ requirements. Relevant upstream documentation:
 
 ## Account session
 
-The account screen explicitly initiates browser import. Cookies are filtered
-by YouTube's domain boundary and expiry, and a YouTube account request must
-succeed before replacing the previous secret. The secret is stored using
-Secret Service, matched by `application=org.aizome.Uta` and
-`service=youtube-music`. It includes the account display name and YouTube
-cookies. Secret Service prompts are handled by the desktop keyring.
+The service reads browser cookie databases itself instead of using yt-dlp's
+importer. That importer copies a database without its write-ahead log, so it
+misses a sign-in that a running Firefox hasn't yet checkpointed. It also
+chooses Chromium's keyring from the desktop's name, and on an unknown desktop
+such as Aizome it picks the fixed "basic text" key. That fails for the
+keyring-sealed cookies of Chrome and Chromium, which Sekka starts with
+`--password-store=gnome-libsecret`.
+
+- **Discovery** (`discover`) walks the known profile folders of the Firefox,
+  Chromium, and WebKit families, including Flatpak and Snap ones. Profile
+  names come from `profiles.ini` and `Local State`. For each database it reads
+  only the host, name, expiry, and last-access columns of youtube.com cookies.
+  Cookie values are never decrypted here, the keyring is never opened, and
+  nothing prompts. A profile counts as signed in when unexpired
+  `__Secure-3PAPISID` and `__Secure-3PSID` cookies are present.
+- **Snapshots.** Every read copies the database with its `-wal` and
+  `-journal` files into a private temporary folder in `$XDG_RUNTIME_DIR`
+  (memory, not disk). It opens the copy and removes it straight away, so the
+  browser's lock is never contended.
+- **Partitions.** Firefox containers are separate sign-ins. Cookies
+  partitioned under another site (YouTube embedded in its page) and those
+  from private windows are excluded. Cookies partitioned under youtube.com
+  itself are kept, because the browser sends them to music.youtube.com.
+- **Decryption.** Chromium's `v10` values use the fixed key. Its `v11` values
+  are tried against every "… Safe Storage" secret in the unlocked keyrings,
+  and against KWallet on Plasma. From Chrome 130, the SHA-256 prefix of the
+  host proves which key is right.
+- **Other sources.** A chosen folder is matched to a known profile where
+  possible. Pasted text is parsed as cookies.txt, a cURL command, or request
+  headers; a pasted `x-goog-authuser` selects among signed-in accounts.
+
+Connecting is always explicit, apart from one case: after **Sign in with your
+browser**, Uta looks every four seconds, for about five minutes, and connects
+the first sign-in that wasn't there before. Cookies are filtered by YouTube's
+domain boundary and expiry, and a YouTube account request must succeed before
+replacing the previous secret. The secret is stored using Secret Service,
+matched by `application=org.aizome.Uta` and `service=youtube-music`. It
+includes the account display name, the YouTube cookies, the account index,
+and the source's identity and label for **Reconnect**. Secret Service prompts
+are handled by the desktop keyring. Pasted text travels to the helper only
+on its standard input, and the Rust `Secret` type prints only its length.
 
 Anonymous operations do not read the keyring or browser. Connected operations
 fail if the keyring cannot be read or the required session cookie has expired;
@@ -49,6 +84,18 @@ and stops current audio. Failed reconnection preserves the previous secret.
 Disconnect removes the keyring secret but retains the local queue and volume.
 
 ## Audio and desktop integration
+
+mpv streams the audio as it arrives: it is heard about a third of a second
+after mpv has the stream's URL. Most of a song's start is asking YouTube for
+that URL, which takes one to three seconds. So while a song plays, Uta looks
+up the next one in the queue. It starts three seconds in, so the lookup's
+burst of work doesn't compete with the song's own start, and again whenever
+the queue changes what comes next. Uta also keeps the streams of the last
+few songs, so Next, Previous, and Repeat One start without asking YouTube.
+A kept stream is used only if its signed URL lasts until the song would end.
+Skipping to a song still being looked up waits for that lookup rather than
+starting a second one. Kept streams live only in memory, and connecting or
+disconnecting discards them.
 
 An actor supervises mpv and controls it over a Unix socket inside a private
 temporary directory. A new load replaces the previous mpv process, giving

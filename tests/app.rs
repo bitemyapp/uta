@@ -6,43 +6,161 @@ use aizome_kit::{
 };
 use aizome_uta::{
     app::{Msg, Page, Playback, Uta},
-    model::{Queue, Repeat, Stream},
+    model::{Link, Queue, Repeat, Source, Stream, Track, ago, link},
     player::{Event, EventKind},
-    service::{Reply, Request, Service, demo_tracks},
+    service::{Reply, Request, Secret, Service, demo_tracks},
     store::{Saved, Store},
 };
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
+
+const NOW: f64 = 1_793_000_000.0;
 
 #[derive(Default)]
 struct Fixture {
     connected: bool,
     calls: Mutex<Vec<(Request, bool)>>,
+    sources: Mutex<Vec<Source>>,
+    /// Streams whose signed URLs expire within a minute.
+    short_lived: bool,
 }
+
+fn source(id: &str, browser: &str, profile: &str, signed_in: bool, used: f64) -> Source {
+    Source {
+        id: id.into(),
+        browser: browser.into(),
+        profile: profile.into(),
+        signed_in,
+        used,
+    }
+}
+
+fn browsers() -> Vec<Source> {
+    vec![
+        source(
+            "chromium:/c/Default",
+            "Chromium",
+            "Person 1",
+            true,
+            NOW - 300.0,
+        ),
+        source(
+            "gecko:/f/x.default",
+            "Firefox",
+            "default-release",
+            false,
+            0.0,
+        ),
+    ]
+}
+
+impl Fixture {
+    fn with_browsers(connected: bool) -> Self {
+        Self {
+            connected,
+            sources: Mutex::new(browsers()),
+            ..Self::default()
+        }
+    }
+
+    fn requests(&self) -> Vec<Request> {
+        self.calls
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(r, _)| r.clone())
+            .collect()
+    }
+
+    /// How often a song's stream was asked for, and with which account state.
+    fn resolves(&self, song: &str) -> Vec<bool> {
+        let calls = self.calls.lock().unwrap();
+        calls
+            .iter()
+            .filter(|(r, _)| matches!(r, Request::Resolve { id } if id == song))
+            .map(|(_, auth)| *auth)
+            .collect()
+    }
+}
+
+fn unix_now() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs_f64()
+}
+
 impl Service for Fixture {
     fn inline(&self) -> bool {
         true
     }
     fn call(&self, request: Request, auth: bool) -> Result<Reply, String> {
         self.calls.lock().unwrap().push((request.clone(), auth));
+        let connected = |source: &str| Reply {
+            connected: true,
+            account: "Test listener".into(),
+            source: source.into(),
+            source_id: if source.contains("Chromium") {
+                "chromium:/c/Default".into()
+            } else {
+                String::new()
+            },
+            ..Reply::default()
+        };
         Ok(match request {
-            Request::Status => Reply {
-                connected: self.connected,
-                account: "Test listener".into(),
+            Request::Status if self.connected => connected("Chromium · Person 1"),
+            Request::Status => Reply::default(),
+            Request::Discover => Reply {
+                sources: self.sources.lock().unwrap().clone(),
+                now: NOW,
                 ..Reply::default()
             },
-            Request::Search { .. } | Request::Liked => Reply {
+            Request::Search { .. } | Request::Liked | Request::History => Reply {
                 tracks: demo_tracks(),
                 ..Reply::default()
             },
-            Request::Connect { .. } => Reply {
-                connected: true,
-                account: "Test listener".into(),
-                ..Reply::default()
-            },
+            Request::Watch { id, radio } => {
+                // The song first, then what YouTube would play after it.
+                let mut tracks = demo_tracks();
+                let first = tracks.iter().position(|t| t.id == id).unwrap_or(0);
+                tracks.rotate_left(first);
+                if radio {
+                    tracks.push(Track {
+                        id: "radio000001".into(),
+                        title: "Something similar".into(),
+                        ..Track::default()
+                    });
+                }
+                Reply {
+                    title: if radio { "Radio" } else { "Up next" }.into(),
+                    tracks,
+                    ..Reply::default()
+                }
+            }
+            Request::Connect { source } => {
+                let found = self
+                    .sources
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .find(|s| s.id == source)
+                    .cloned();
+                match found {
+                    Some(s) if s.signed_in => connected(&s.label()),
+                    _ => return Err("That browser profile is no longer available.".into()),
+                }
+            }
+            Request::ConnectText { .. } => connected("Copied from your browser"),
             Request::Disconnect | Request::Rate { .. } => Reply::default(),
-            Request::Resolve { .. } => Reply {
+            Request::Resolve { id } => Reply {
                 stream: Some(Stream {
-                    url: "https://example.invalid/audio".into(),
+                    // Signed like YouTube's: good for six hours, or a minute.
+                    url: format!(
+                        "https://example.invalid/videoplayback?id={id}&expire={:.0}",
+                        unix_now() + if self.short_lived { 60.0 } else { 21600.0 }
+                    ),
                     codec: "opus".into(),
                     bitrate: 251.0,
                     authenticated: auth,
@@ -56,10 +174,7 @@ impl Service for Fixture {
 }
 
 fn app(connected: bool) -> (Harness<Uta>, Arc<Fixture>) {
-    let service = Arc::new(Fixture {
-        connected,
-        ..Fixture::default()
-    });
+    let service = Arc::new(Fixture::with_browsers(connected));
     (
         Harness::new(Uta::new(service.clone(), None, false)),
         service,
@@ -277,14 +392,7 @@ fn native_views_in_both_themes() {
             ..Appearance::default()
         };
         let mut h = Harness::with(
-            Uta::new(
-                Arc::new(Fixture {
-                    connected: true,
-                    ..Fixture::default()
-                }),
-                None,
-                false,
-            ),
+            Uta::new(Arc::new(Fixture::with_browsers(true)), None, false),
             appearance,
             true,
         );
@@ -312,6 +420,13 @@ fn native_views_in_both_themes() {
             format!("tests/snapshots/account-{name}.png"),
             1.0,
         );
+        h.send(Msg::Disconnect);
+        assert_golden(
+            &mut h,
+            w,
+            format!("tests/snapshots/connect-{name}.png"),
+            1.0,
+        );
         h.resize(w, Size::new(800.0, 560.0));
         h.send(Msg::Page(Page::Queue));
         assert_golden(
@@ -321,4 +436,381 @@ fn native_views_in_both_themes() {
             1.0,
         );
     }
+}
+
+#[test]
+fn a_signed_in_browser_connects_with_one_click_and_names_itself() {
+    let (mut h, fixture) = app(false);
+    let w = h.window();
+    h.send(Msg::Page(Page::Account));
+    assert!(h.texts(w).iter().any(|t| t == "Chromium · Person 1"));
+    assert!(
+        h.texts(w)
+            .iter()
+            .any(|t| t == "Also checked, not signed in: Firefox · default-release.")
+    );
+    let connect = h.find_id(w, "connect-0").expect("a connect button");
+    h.click(w, connect.center());
+    let app = h.program();
+    assert!(app.connected);
+    assert_eq!(app.source, "Chromium · Person 1");
+    assert!(
+        fixture
+            .requests()
+            .iter()
+            .any(|r| matches!(r, Request::Connect { source } if source == "chromium:/c/Default"))
+    );
+    // Reconnecting later goes back to the same browser.
+    assert!(h.find_id(w, "reconnect").is_some());
+}
+
+#[test]
+fn signing_in_with_a_browser_connects_once_its_sign_in_appears() {
+    let (mut h, fixture) = app(false);
+    fixture.sources.lock().unwrap()[0].signed_in = false;
+    h.send(Msg::Page(Page::Account));
+    h.send(Msg::SignIn);
+    assert!(h.program().signing_in);
+    h.advance(Duration::from_secs(5));
+    assert!(!h.program().connected);
+    // The browser saves the sign-in; the next look connects by itself.
+    fixture.sources.lock().unwrap()[1].signed_in = true;
+    h.advance(Duration::from_secs(5));
+    let app = h.program();
+    assert!(app.connected);
+    assert!(!app.signing_in);
+    assert_eq!(app.source, "Firefox · default-release");
+}
+
+#[test]
+fn a_sign_in_already_there_is_offered_but_not_connected_by_itself() {
+    let (mut h, _) = app(false);
+    h.send(Msg::Page(Page::Account));
+    h.send(Msg::SignIn);
+    for _ in 0..3 {
+        h.advance(Duration::from_secs(5));
+    }
+    assert!(!h.program().connected);
+    assert!(h.program().signing_in);
+    h.send(Msg::StopWaiting);
+    h.advance(Duration::from_secs(5));
+    assert!(!h.program().signing_in);
+}
+
+#[test]
+fn the_library_invites_a_one_click_connection() {
+    let (mut h, fixture) = app(false);
+    let w = h.window();
+    h.send(Msg::Page(Page::Liked));
+    let connect = h.find_id(w, "connect-best").expect("one-click connect");
+    assert!(
+        h.texts(w)
+            .iter()
+            .any(|t| t == "Connect Chromium · Person 1")
+    );
+    h.click(w, connect.center());
+    assert!(h.program().connected);
+    assert_eq!(h.program().tracks.len(), 6);
+    assert!(
+        fixture
+            .requests()
+            .iter()
+            .any(|r| matches!(r, Request::Liked))
+    );
+}
+
+#[test]
+fn a_request_copied_from_any_browser_connects_without_printing_its_cookies() {
+    let (mut h, fixture) = app(false);
+    let w = h.window();
+    h.send(Msg::Page(Page::Account));
+    h.platform.clipboard =
+        Some("curl 'https://music.youtube.com/' -b '__Secure-3PAPISID=private'".into());
+    let paste = h.find_id(w, "connect-clipboard").expect("clipboard button");
+    h.click(w, paste.center());
+    assert!(h.program().connected);
+    let requests = fixture.requests();
+    let text = requests
+        .iter()
+        .find(|r| matches!(r, Request::ConnectText { .. }))
+        .expect("sent");
+    assert!(!format!("{text:?}").contains("private"));
+    assert!(serde_json::to_string(text).unwrap().contains("private"));
+    assert!(!format!("{:?}", Secret("private".into())).contains("private"));
+}
+
+#[test]
+fn an_empty_clipboard_explains_what_to_copy() {
+    let (mut h, fixture) = app(false);
+    h.send(Msg::Page(Page::Account));
+    h.platform.clipboard = None;
+    h.send(Msg::ConnectClipboard);
+    assert!(
+        h.program()
+            .error
+            .as_deref()
+            .unwrap()
+            .contains("developer tools")
+    );
+    assert!(
+        !fixture
+            .requests()
+            .iter()
+            .any(|r| matches!(r, Request::ConnectText { .. }))
+    );
+}
+
+#[test]
+fn song_links_play_and_playlist_links_open() {
+    let (mut h, fixture) = app(false);
+    let songs = demo_tracks();
+    h.send(Msg::Query(format!(
+        "https://music.youtube.com/watch?v={}&si=x",
+        songs[2].id
+    )));
+    h.send(Msg::Search);
+    let app = h.program();
+    assert_eq!(app.page, Page::Collection);
+    assert_eq!(app.title, "Up next");
+    assert_eq!(app.queue.track().unwrap().id, songs[2].id);
+    assert_eq!(app.playback, Playback::Resolving);
+    h.send(Msg::Query(
+        "music.youtube.com/playlist?list=PLabc_123".into(),
+    ));
+    h.send(Msg::Search);
+    assert!(fixture.requests().iter().any(|r| matches!(r,
+        Request::Collection { id, kind } if id == "PLabc_123" && kind == "playlist")));
+}
+
+#[test]
+fn radio_follows_the_song_playing_without_restarting_it() {
+    let (mut h, fixture) = app(false);
+    search(&mut h);
+    h.send(Msg::Play(1));
+    let generation = h.program().play_generation;
+    h.send(Msg::Player(Event {
+        generation,
+        kind: EventKind::Started,
+    }));
+    h.send(Msg::StartRadio(None));
+    let app = h.program();
+    assert_eq!(app.play_generation, generation);
+    assert_eq!(app.playback, Playback::Playing);
+    assert_eq!(app.queue.current, Some(0));
+    assert_eq!(app.queue.tracks[0].id, demo_tracks()[1].id);
+    assert_eq!(app.queue.tracks.last().unwrap().id, "radio000001");
+    assert_eq!(
+        app.queue
+            .tracks
+            .iter()
+            .filter(|t| t.id == demo_tracks()[1].id)
+            .count(),
+        1
+    );
+    assert!(
+        fixture
+            .requests()
+            .iter()
+            .any(|r| matches!(r, Request::Watch { radio: true, .. }))
+    );
+}
+
+#[test]
+fn play_next_and_moving_rows_keep_the_song_playing() {
+    let (mut h, _) = app(false);
+    search(&mut h);
+    let songs = demo_tracks();
+    h.send(Msg::Play(0));
+    h.send(Msg::Page(Page::Queue));
+    h.send(Msg::PlayNext(4));
+    let order: Vec<_> = h
+        .program()
+        .queue
+        .tracks
+        .iter()
+        .map(|t| t.title.clone())
+        .collect();
+    assert_eq!(order[1], songs[4].title);
+    h.send(Msg::Move(0, 2));
+    assert_eq!(h.program().queue.current, Some(2));
+    assert_eq!(h.program().queue.track().unwrap().id, songs[0].id);
+    h.send(Msg::Page(Page::Search));
+    search(&mut h);
+    h.send(Msg::PlayNext(5));
+    assert_eq!(h.program().queue.tracks[3].id, songs[5].id);
+    assert_eq!(h.program().queue.tracks.len(), 7);
+}
+
+#[test]
+fn links_relative_times_and_queue_moves() {
+    assert_eq!(
+        link("https://music.youtube.com/watch?v=dQw4w9WgXcQ&list=RDAMVM"),
+        Some(Link::Song("dQw4w9WgXcQ".into()))
+    );
+    assert_eq!(
+        link("youtu.be/dQw4w9WgXcQ"),
+        Some(Link::Song("dQw4w9WgXcQ".into()))
+    );
+    assert_eq!(
+        link("https://www.youtube.com/playlist?list=PL_x-1"),
+        Some(Link::Playlist("PL_x-1".into()))
+    );
+    assert_eq!(
+        link("https://music.youtube.com/browse/VLPL_x-1"),
+        Some(Link::Playlist("PL_x-1".into()))
+    );
+    assert_eq!(
+        link("https://music.youtube.com/browse/MPREb_abc"),
+        Some(Link::Album("MPREb_abc".into()))
+    );
+    assert_eq!(link("https://music.youtube.com/watch?v=short"), None);
+    assert_eq!(link("https://evil.example/watch?v=dQw4w9WgXcQ"), None);
+    assert_eq!(link("Bill Evans Waltz for Debby"), None);
+    assert_eq!(ago(NOW - 30.0, NOW), "just now");
+    assert_eq!(ago(NOW - 300.0, NOW), "5 minutes ago");
+    assert_eq!(ago(NOW - 3600.0, NOW), "1 hour ago");
+    assert_eq!(ago(NOW - 90000.0, NOW), "yesterday");
+    assert_eq!(ago(NOW - 86400.0 * 9.0, NOW), "9 days ago");
+    let mut queue = Queue::default();
+    queue.replace(demo_tracks(), 3);
+    assert!(queue.move_track(5, 0));
+    assert_eq!(queue.current, Some(4));
+    assert!(queue.move_track(4, 5));
+    assert_eq!(queue.current, Some(5));
+    assert!(!queue.move_track(0, 6));
+    queue.insert_next(demo_tracks()[0].clone());
+    assert_eq!(queue.tracks.len(), 7);
+    assert_eq!(queue.current, Some(5));
+}
+
+/// The song loads and plays for a few seconds, long enough to look ahead.
+fn start(h: &mut Harness<Uta>) {
+    let generation = h.program().play_generation;
+    h.send(Msg::Player(Event {
+        generation,
+        kind: EventKind::Started,
+    }));
+    h.advance(Duration::from_secs(4));
+}
+
+#[test]
+fn the_next_song_is_looked_up_while_one_plays_and_starts_without_asking_again() {
+    let (mut h, fixture) = app(false);
+    let songs = demo_tracks();
+    search(&mut h);
+    h.send(Msg::Play(0));
+    let generation = h.program().play_generation;
+    h.send(Msg::Player(Event {
+        generation,
+        kind: EventKind::Started,
+    }));
+    // Not while the song is starting: its own start comes first.
+    h.advance(Duration::from_secs(1));
+    assert!(fixture.resolves(&songs[1].id).is_empty());
+    h.advance(Duration::from_secs(3));
+    assert_eq!(fixture.resolves(&songs[1].id).len(), 1);
+    h.send(Msg::Next);
+    // Its stream is already here: it loads at once, without a second lookup.
+    assert_eq!(fixture.resolves(&songs[1].id).len(), 1);
+    assert_eq!(h.program().stream_label, "OPUS · 251 kbps");
+    start(&mut h);
+    assert_eq!(fixture.resolves(&songs[2].id).len(), 1);
+    // Back to a song just played: its stream is kept too.
+    h.send(Msg::Previous);
+    assert_eq!(h.program().queue.current, Some(0));
+    assert_eq!(fixture.resolves(&songs[0].id).len(), 1);
+    // Reordering the queue looks up the song now next.
+    start(&mut h);
+    h.send(Msg::Page(Page::Queue));
+    h.send(Msg::Move(4, 1));
+    assert_eq!(fixture.resolves(&songs[4].id).len(), 1);
+}
+
+#[test]
+fn a_stream_that_would_expire_before_the_song_ends_is_looked_up_again() {
+    let fixture = Arc::new(Fixture {
+        short_lived: true,
+        ..Fixture::with_browsers(false)
+    });
+    let mut h = Harness::new(Uta::new(fixture.clone(), None, false));
+    let songs = demo_tracks();
+    search(&mut h);
+    h.send(Msg::Play(0));
+    start(&mut h);
+    h.send(Msg::Next);
+    assert_eq!(fixture.resolves(&songs[1].id).len(), 2);
+}
+
+#[test]
+fn skipping_to_a_song_still_being_looked_up_waits_for_that_lookup() {
+    let fixture = Arc::new(Fixture {
+        short_lived: true,
+        ..Fixture::with_browsers(false)
+    });
+    let mut h = Harness::new(Uta::new(fixture.clone(), None, false));
+    let songs = demo_tracks();
+    search(&mut h);
+    h.send(Msg::Play(0));
+    start(&mut h);
+    // As if the look-ahead for the next song hadn't answered yet.
+    h.program_mut().prefetching = Some(songs[1].id.clone());
+    h.send(Msg::Next);
+    assert_eq!(fixture.resolves(&songs[1].id).len(), 1);
+    assert_eq!(h.program().playback, Playback::Resolving);
+    assert!(h.program().stream_label.is_empty());
+    let generation = h.program().auth_generation;
+    let stream = Stream {
+        url: "https://example.invalid/videoplayback?expire=1".into(),
+        codec: "opus".into(),
+        bitrate: 160.0,
+        ..Stream::default()
+    };
+    h.send(Msg::Prefetched(
+        generation,
+        songs[1].id.clone(),
+        Ok(Reply {
+            stream: Some(stream),
+            ..Reply::default()
+        }),
+    ));
+    assert_eq!(h.program().stream_label, "OPUS · 160 kbps");
+    assert!(h.program().prefetching.is_none());
+}
+
+#[test]
+fn connecting_forgets_streams_looked_up_without_the_account() {
+    let (mut h, fixture) = app(false);
+    let songs = demo_tracks();
+    search(&mut h);
+    h.send(Msg::Play(0));
+    start(&mut h);
+    assert_eq!(fixture.resolves(&songs[1].id), [false]);
+    h.send(Msg::Connect("chromium:/c/Default".into()));
+    assert!(h.program().connected);
+    search(&mut h);
+    h.send(Msg::Play(1));
+    assert_eq!(fixture.resolves(&songs[1].id), [false, true]);
+}
+
+#[test]
+fn signed_urls_say_when_they_expire_and_the_queue_says_what_is_next() {
+    use aizome_uta::model::stream_expiry;
+    assert_eq!(
+        stream_expiry("https://rr1.googlevideo.com/videoplayback?expire=1793021000&ei=x"),
+        Some(1793021000.0)
+    );
+    assert_eq!(
+        stream_expiry(
+            "https://manifest.googlevideo.com/api/manifest/hls_playlist/expire/1793021000/ei/x/file/index.m3u8"
+        ),
+        Some(1793021000.0)
+    );
+    assert_eq!(stream_expiry("https://example.invalid/audio"), None);
+    let mut queue = Queue::default();
+    queue.replace(demo_tracks(), 5);
+    assert!(queue.peek_next().is_none());
+    queue.repeat = Repeat::All;
+    assert_eq!(queue.peek_next().unwrap().id, demo_tracks()[0].id);
+    queue.current = Some(2);
+    assert_eq!(queue.peek_next().unwrap().id, demo_tracks()[3].id);
 }

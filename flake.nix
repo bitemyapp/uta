@@ -11,7 +11,7 @@
     let
       systems = [ "x86_64-linux" "aarch64-linux" ];
       each = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
-      pythonFor = pkgs: pkgs.python3.withPackages (ps: [ ps.ytmusicapi ps.yt-dlp ps.secretstorage ]);
+      pythonFor = pkgs: pkgs.python3.withPackages (ps: [ ps.ytmusicapi ps.yt-dlp ps.secretstorage ps.cryptography ]);
     in {
       packages = each (pkgs: rec {
         uta = pkgs.callPackage ./nix/package.nix {
