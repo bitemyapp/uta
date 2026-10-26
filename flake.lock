@@ -1,0 +1,68 @@
+{
+  "nodes": {
+    "aizome": {
+      "inputs": {
+        "nixpkgs": "nixpkgs",
+        "sidestep": "sidestep"
+      },
+      "locked": {
+        "lastModified": 1792568558,
+        "narHash": "sha256-ky8EXWpbalISl8zmZk7yJHC4yKcA6DX94su5cL/Ppwg=",
+        "owner": "bitemyapp",
+        "repo": "aizome",
+        "rev": "729cf1c140b349dc6f8a9d7ba1772c4b9bb4fe18",
+        "type": "github"
+      },
+      "original": {
+        "owner": "bitemyapp",
+        "repo": "aizome",
+        "rev": "729cf1c140b349dc6f8a9d7ba1772c4b9bb4fe18",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1791734076,
+        "narHash": "sha256-i5qk1kLiit98rRbh1AXmWBNT9QXC/y4l5Wk/u5EdpDQ=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "7fd4004d0511991fff3a0524856a9be09e28c5f0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "7fd4004d0511991fff3a0524856a9be09e28c5f0",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "aizome": "aizome",
+        "nixpkgs": [
+          "aizome",
+          "nixpkgs"
+        ]
+      }
+    },
+    "sidestep": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792518061,
+        "narHash": "sha256-kVYbwkcYBZoovubqbMYbdC0B9DpZSsHLI5V9VUuVym8=",
+        "owner": "bitemyapp",
+        "repo": "sidestep",
+        "rev": "16a1e376c0bd85d52ef020e114bbd1707fb9b14b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "bitemyapp",
+        "repo": "sidestep",
+        "rev": "16a1e376c0bd85d52ef020e114bbd1707fb9b14b",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

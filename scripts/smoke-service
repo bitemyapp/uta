@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+"""Optional public-network check. Never reads browser cookies or the keyring."""
+import json
+import subprocess
+import sys
+from pathlib import Path
+from urllib.parse import urlsplit
+
+helper = Path(__file__).resolve().parent.parent / "service" / "uta_service.py"
+
+
+def call(**request):
+    request["authenticated"] = False
+    result = subprocess.run([sys.executable, str(helper)], input=json.dumps(request),
+                            text=True, capture_output=True, timeout=125, check=True)
+    reply = json.loads(result.stdout)
+    if "error" in reply:
+        raise SystemExit(reply["error"])
+    return reply["data"]
+
+
+result = call(op="search", query="Bill Evans Waltz for Debby", filter="songs")
+assert result["tracks"], "Search returned no songs"
+print(f"Search: {len(result['tracks'])} songs")
+song = next((t for t in result["tracks"] if t["artists"] == "Bill Evans"), result["tracks"][0])
+stream = call(op="resolve", id=song["id"])["stream"]
+assert urlsplit(stream["url"]).scheme == "https"
+assert not stream["authenticated"]
+print(f"Playback: {stream['codec']}, {stream['bitrate']:.0f} kbps; HTTPS stream resolved")

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Uta
+GenericName=YouTube Music
+Comment=Listen to YouTube Music with a native Aizome player
+Exec=aizome-uta
+Icon=org.aizome.Uta
+Terminal=false
+Categories=AudioVideo;Audio;Music;Player;
+Keywords=YouTube;Music;Songs;Playlists;Audio;
+StartupWMClass=org.aizome.Uta
+DBusActivatable=false
