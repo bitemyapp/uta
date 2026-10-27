@@ -1,0 +1,435 @@
+{
+  "version": "18.3.0",
+  "deno": "2.9.7",
+  "utc": "2026-10-27T22:46:18.216Z",
+  "samples": [
+    {
+      "case": "session-no-player",
+      "round": 0,
+      "ms": 180,
+      "ok": true,
+      "requests": [
+        {
+          "endpoint": "bootstrap-or-other",
+          "ms": 110
+        },
+        {
+          "endpoint": "config",
+          "ms": 61
+        }
+      ]
+    },
+    {
+      "case": "music-search-first-page",
+      "round": 0,
+      "ms": 477,
+      "ok": true,
+      "rows": 20,
+      "continuation": true,
+      "requests": [
+        {
+          "endpoint": "search",
+          "ms": 471
+        }
+      ]
+    },
+    {
+      "case": "music-search-continuation",
+      "round": 0,
+      "ms": 627,
+      "ok": true,
+      "rows": 20,
+      "requests": [
+        {
+          "endpoint": "search",
+          "ms": 623
+        }
+      ]
+    },
+    {
+      "case": "music-search-first-page",
+      "round": 1,
+      "ms": 486,
+      "ok": true,
+      "rows": 20,
+      "continuation": true,
+      "requests": [
+        {
+          "endpoint": "search",
+          "ms": 482
+        }
+      ]
+    },
+    {
+      "case": "music-search-continuation",
+      "round": 1,
+      "ms": 625,
+      "ok": true,
+      "rows": 20,
+      "requests": [
+        {
+          "endpoint": "search",
+          "ms": 622
+        }
+      ]
+    },
+    {
+      "case": "music-search-first-page",
+      "round": 2,
+      "ms": 760,
+      "ok": true,
+      "rows": 20,
+      "continuation": true,
+      "requests": [
+        {
+          "endpoint": "search",
+          "ms": 757
+        }
+      ]
+    },
+    {
+      "case": "music-search-continuation",
+      "round": 2,
+      "ms": 611,
+      "ok": true,
+      "rows": 20,
+      "requests": [
+        {
+          "endpoint": "search",
+          "ms": 608
+        }
+      ]
+    },
+    {
+      "case": "music-search-first-page",
+      "round": 3,
+      "ms": 408,
+      "ok": true,
+      "rows": 20,
+      "continuation": true,
+      "requests": [
+        {
+          "endpoint": "search",
+          "ms": 405
+        }
+      ]
+    },
+    {
+      "case": "music-search-continuation",
+      "round": 3,
+      "ms": 553,
+      "ok": true,
+      "rows": 20,
+      "requests": [
+        {
+          "endpoint": "search",
+          "ms": 550
+        }
+      ]
+    },
+    {
+      "case": "music-search-first-page",
+      "round": 4,
+      "ms": 462,
+      "ok": true,
+      "rows": 20,
+      "continuation": true,
+      "requests": [
+        {
+          "endpoint": "search",
+          "ms": 458
+        }
+      ]
+    },
+    {
+      "case": "music-search-continuation",
+      "round": 4,
+      "ms": 723,
+      "ok": true,
+      "rows": 20,
+      "requests": [
+        {
+          "endpoint": "search",
+          "ms": 721
+        }
+      ]
+    },
+    {
+      "case": "session-with-player",
+      "round": 0,
+      "ms": 637,
+      "ok": true,
+      "requests": [
+        {
+          "endpoint": "bootstrap-or-other",
+          "ms": 40
+        },
+        {
+          "endpoint": "config",
+          "ms": 56
+        },
+        {
+          "endpoint": "bootstrap-or-other",
+          "ms": 40
+        },
+        {
+          "endpoint": "player-js",
+          "ms": 21
+        }
+      ]
+    },
+    {
+      "case": "music-info",
+      "round": 0,
+      "ms": 216,
+      "ok": true,
+      "playability": "OK",
+      "adaptive_formats": 14,
+      "direct_formats": 0,
+      "ciphered_formats": 14,
+      "requests": [
+        {
+          "endpoint": "next",
+          "ms": 92
+        },
+        {
+          "endpoint": "player",
+          "ms": 213
+        }
+      ]
+    },
+    {
+      "case": "music-decipher",
+      "round": 0,
+      "ms": 13,
+      "ok": true,
+      "mime": "audio/mp4; codecs=\"mp4a.40.2\"",
+      "bitrate": 140122,
+      "requests": []
+    },
+    {
+      "case": "music-media-range",
+      "round": 0,
+      "ms": 37,
+      "ok": true,
+      "status": 206,
+      "content_type": "audio/mp4",
+      "first_chunk_bytes": 4096,
+      "requests": []
+    },
+    {
+      "case": "music-media-2MiB",
+      "round": 0,
+      "ms": 10,
+      "ok": true,
+      "status": 403,
+      "bytes": 0,
+      "content_type": "text/plain",
+      "requests": []
+    },
+    {
+      "case": "music-mpv",
+      "round": 0,
+      "ms": 194,
+      "ok": true,
+      "playback": "media-failed",
+      "requests": []
+    },
+    {
+      "case": "music-info",
+      "round": 1,
+      "ms": 210,
+      "ok": true,
+      "playability": "OK",
+      "adaptive_formats": 14,
+      "direct_formats": 0,
+      "ciphered_formats": 14,
+      "requests": [
+        {
+          "endpoint": "next",
+          "ms": 131
+        },
+        {
+          "endpoint": "player",
+          "ms": 208
+        }
+      ]
+    },
+    {
+      "case": "music-decipher",
+      "round": 1,
+      "ms": 11,
+      "ok": true,
+      "mime": "audio/mp4; codecs=\"mp4a.40.2\"",
+      "bitrate": 132228,
+      "requests": []
+    },
+    {
+      "case": "music-media-range",
+      "round": 1,
+      "ms": 419,
+      "ok": true,
+      "status": 206,
+      "content_type": "audio/mp4",
+      "first_chunk_bytes": 4096,
+      "requests": []
+    },
+    {
+      "case": "music-media-2MiB",
+      "round": 1,
+      "ms": 11,
+      "ok": true,
+      "status": 403,
+      "bytes": 0,
+      "content_type": "text/plain",
+      "requests": []
+    },
+    {
+      "case": "music-mpv",
+      "round": 1,
+      "ms": 183,
+      "ok": true,
+      "playback": "media-failed",
+      "requests": []
+    },
+    {
+      "case": "music-info",
+      "round": 2,
+      "ms": 210,
+      "ok": true,
+      "playability": "OK",
+      "adaptive_formats": 14,
+      "direct_formats": 0,
+      "ciphered_formats": 14,
+      "requests": [
+        {
+          "endpoint": "next",
+          "ms": 148
+        },
+        {
+          "endpoint": "player",
+          "ms": 208
+        }
+      ]
+    },
+    {
+      "case": "music-decipher",
+      "round": 2,
+      "ms": 11,
+      "ok": true,
+      "mime": "audio/mp4; codecs=\"mp4a.40.2\"",
+      "bitrate": 131277,
+      "requests": []
+    },
+    {
+      "case": "music-media-range",
+      "round": 2,
+      "ms": 29,
+      "ok": true,
+      "status": 206,
+      "content_type": "audio/mp4",
+      "first_chunk_bytes": 4096,
+      "requests": []
+    },
+    {
+      "case": "music-media-2MiB",
+      "round": 2,
+      "ms": 12,
+      "ok": true,
+      "status": 403,
+      "bytes": 0,
+      "content_type": "text/plain",
+      "requests": []
+    },
+    {
+      "case": "music-mpv",
+      "round": 2,
+      "ms": 177,
+      "ok": true,
+      "playback": "media-failed",
+      "requests": []
+    },
+    {
+      "case": "youtube-info",
+      "round": 0,
+      "ms": 252,
+      "ok": true,
+      "playability": "OK",
+      "adaptive_formats": 19,
+      "direct_formats": 0,
+      "ciphered_formats": 0,
+      "requests": [
+        {
+          "endpoint": "player",
+          "ms": 250
+        }
+      ]
+    },
+    {
+      "case": "youtube-decipher",
+      "round": 0,
+      "ms": 0,
+      "ok": false,
+      "error_type": "Error",
+      "no_matching_formats": false,
+      "requests": []
+    },
+    {
+      "case": "youtube-info",
+      "round": 1,
+      "ms": 224,
+      "ok": true,
+      "playability": "OK",
+      "adaptive_formats": 19,
+      "direct_formats": 0,
+      "ciphered_formats": 0,
+      "requests": [
+        {
+          "endpoint": "player",
+          "ms": 222
+        }
+      ]
+    },
+    {
+      "case": "youtube-decipher",
+      "round": 1,
+      "ms": 0,
+      "ok": false,
+      "error_type": "Error",
+      "no_matching_formats": false,
+      "requests": []
+    },
+    {
+      "case": "youtube-info",
+      "round": 2,
+      "ms": 210,
+      "ok": true,
+      "playability": "OK",
+      "adaptive_formats": 19,
+      "direct_formats": 0,
+      "ciphered_formats": 0,
+      "requests": [
+        {
+          "endpoint": "player",
+          "ms": 208
+        }
+      ]
+    },
+    {
+      "case": "youtube-decipher",
+      "round": 2,
+      "ms": 0,
+      "ok": false,
+      "error_type": "Error",
+      "no_matching_formats": false,
+      "requests": []
+    }
+  ],
+  "public_video_ids": [
+    "Az4SnX521pI",
+    "ErsVeQfjeTU",
+    "KJEzFvXx3Xw",
+    "WKU8DJzipW4",
+    "jy5x7bDYd4o"
+  ]
+}

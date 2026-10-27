@@ -1,0 +1,212 @@
+{
+  "version": "5.0.2",
+  "node": "v24.21.0",
+  "utc": "2026-10-27T22:54:09.888Z",
+  "import_ms": 9,
+  "loadavg": [
+    0.28,
+    1.29,
+    1.01
+  ],
+  "experiment": "omit-next",
+  "samples": [
+    {
+      "case": "default-info",
+      "round": 0,
+      "ms": 267,
+      "ok": true,
+      "client": "visionos",
+      "formats": 23,
+      "requests": [
+        {
+          "endpoint": "bootstrap-or-other",
+          "ms": 90
+        },
+        {
+          "endpoint": "player",
+          "ms": 77
+        },
+        {
+          "endpoint": "next",
+          "ms": 0,
+          "stubbed": true
+        },
+        {
+          "endpoint": "player",
+          "ms": 84
+        }
+      ],
+      "rss_mib": 87
+    },
+    {
+      "case": "default-choose",
+      "round": 0,
+      "ms": 0,
+      "ok": true,
+      "itag": 251,
+      "codec": "opus",
+      "bitrate": 152,
+      "direct_url": true,
+      "client": "visionos",
+      "requests": [],
+      "rss_mib": 87
+    },
+    {
+      "case": "default-2MiB",
+      "round": 0,
+      "ms": 185,
+      "ok": true,
+      "bytes": 2097152,
+      "first_byte_ms": 50,
+      "media_ok": true,
+      "requests": [
+        {
+          "endpoint": "media",
+          "ms": 49
+        }
+      ],
+      "rss_mib": 93
+    },
+    {
+      "case": "default-mpv",
+      "round": 0,
+      "ms": 244,
+      "ok": true,
+      "playback": "advanced",
+      "mpv_ms": 180.27,
+      "requests": [],
+      "rss_mib": 93
+    },
+    {
+      "case": "default-info",
+      "round": 1,
+      "ms": 188,
+      "ok": true,
+      "client": "visionos",
+      "formats": 20,
+      "requests": [
+        {
+          "endpoint": "player",
+          "ms": 124
+        },
+        {
+          "endpoint": "next",
+          "ms": 0,
+          "stubbed": true
+        },
+        {
+          "endpoint": "player",
+          "ms": 60
+        }
+      ],
+      "rss_mib": 94
+    },
+    {
+      "case": "default-choose",
+      "round": 1,
+      "ms": 0,
+      "ok": true,
+      "itag": 251,
+      "codec": "opus",
+      "bitrate": 143,
+      "direct_url": true,
+      "client": "visionos",
+      "requests": [],
+      "rss_mib": 94
+    },
+    {
+      "case": "default-2MiB",
+      "round": 1,
+      "ms": 11,
+      "ok": true,
+      "bytes": 2097152,
+      "first_byte_ms": 4,
+      "media_ok": true,
+      "requests": [
+        {
+          "endpoint": "media",
+          "ms": 3
+        }
+      ],
+      "rss_mib": 95
+    },
+    {
+      "case": "default-mpv",
+      "round": 1,
+      "ms": 243,
+      "ok": true,
+      "playback": "advanced",
+      "mpv_ms": 180.47,
+      "requests": [],
+      "rss_mib": 95
+    },
+    {
+      "case": "default-info",
+      "round": 2,
+      "ms": 130,
+      "ok": true,
+      "client": "visionos",
+      "formats": 20,
+      "requests": [
+        {
+          "endpoint": "player",
+          "ms": 60
+        },
+        {
+          "endpoint": "next",
+          "ms": 0,
+          "stubbed": true
+        },
+        {
+          "endpoint": "player",
+          "ms": 66
+        }
+      ],
+      "rss_mib": 95
+    },
+    {
+      "case": "default-choose",
+      "round": 2,
+      "ms": 0,
+      "ok": true,
+      "itag": 251,
+      "codec": "opus",
+      "bitrate": 140,
+      "direct_url": true,
+      "client": "visionos",
+      "requests": [],
+      "rss_mib": 95
+    },
+    {
+      "case": "default-2MiB",
+      "round": 2,
+      "ms": 153,
+      "ok": true,
+      "bytes": 2097152,
+      "first_byte_ms": 32,
+      "media_ok": true,
+      "requests": [
+        {
+          "endpoint": "media",
+          "ms": 32
+        }
+      ],
+      "rss_mib": 97
+    },
+    {
+      "case": "default-mpv",
+      "round": 2,
+      "ms": 242,
+      "ok": true,
+      "playback": "advanced",
+      "mpv_ms": 177.97,
+      "requests": [],
+      "rss_mib": 97
+    }
+  ],
+  "public_video_ids": [
+    "xqX3oiaxYcc",
+    "ErsVeQfjeTU",
+    "KJEzFvXx3Xw"
+  ]
+}

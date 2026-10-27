@@ -1,0 +1,264 @@
+#!/usr/bin/env python3
+"""Public, anonymous research probes; no browser/keyring access or account writes.
+
+Run in nix develop. JSON output contains timings and counts, never stream URLs,
+cookies, response bodies, or third-party error messages. No application changes.
+"""
+import argparse
+import contextlib
+import importlib.metadata
+import io
+import json
+import os
+from pathlib import Path
+import socket
+import statistics
+import subprocess
+import sys
+import tempfile
+import time
+from urllib.parse import urlsplit
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "service"))
+import uta_service as service
+
+
+def ms(start):
+    return round((time.perf_counter() - start) * 1000, 2)
+
+
+def endpoint(url):
+    parsed = urlsplit(url)
+    if parsed.path.startswith("/s/player/"):
+        return "player-js"
+    if "/youtubei/v1/" in parsed.path:
+        return "innertube-" + parsed.path.rsplit("/", 1)[-1]
+    if parsed.hostname and parsed.hostname.endswith("googlevideo.com"):
+        return "media"
+    if parsed.path == "/watch":
+        return "watch-page"
+    return "bootstrap-or-other"
+
+
+def play_probe(stream):
+    """First positive playback position through mpv's null sink, not audible output."""
+    with tempfile.TemporaryDirectory(prefix="uta-research-mpv-") as directory:
+        path = str(Path(directory) / "mpv.sock")
+        started = time.perf_counter()
+        process = subprocess.Popen([
+            "mpv", "--no-config", "--idle=yes", "--no-terminal", "--really-quiet",
+            "--no-video", "--audio-display=no", "--ytdl=no", "--ao=null",
+            f"--input-ipc-server={path}",
+        ], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            with socket.socket(socket.AF_UNIX) as connection:
+                connection.settimeout(1)
+                while True:
+                    try:
+                        connection.connect(path)
+                        break
+                    except (FileNotFoundError, ConnectionRefusedError):
+                        if ms(started) > 4000 or process.poll() is not None:
+                            return {"playback": "mpv-start-failed"}
+                        time.sleep(0.01)
+                commands = [
+                    ["set_property", "http-header-fields", [f"{k}: {v}" for k, v in stream.get("headers", {}).items()]],
+                    ["observe_property", 1, "time-pos"],
+                    ["loadfile", stream["url"], "replace"],
+                ]
+                for command in commands:
+                    connection.sendall(json.dumps({"command": command}).encode() + b"\n")
+                pending = b""
+                while ms(started) < 15000:
+                    try:
+                        data = connection.recv(65536)
+                    except TimeoutError:
+                        continue
+                    if not data:
+                        break
+                    pending += data
+                    while b"\n" in pending:
+                        line, pending = pending.split(b"\n", 1)
+                        event = json.loads(line)
+                        if event.get("name") == "time-pos" and (event.get("data") or 0) > 0:
+                            return {"playback": "advanced", "mpv_ms": ms(started)}
+                        if event.get("event") == "end-file" and event.get("reason") == "error":
+                            return {"playback": "media-failed"}
+                return {"playback": "timed-out"}
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+
+
+def cold(request):
+    result = subprocess.run([sys.executable, "-c", (ROOT / "service/uta_service.py").read_text()],
+                            input=json.dumps({**request, "authenticated": False}),
+                            text=True, capture_output=True, timeout=125, check=True)
+    reply = json.loads(result.stdout)
+    if "error" in reply:
+        raise RuntimeError("helper-error")
+    return reply["data"]
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--rounds", type=int, default=5)
+    parser.add_argument("--phase", choices=["all", "metadata", "extract", "paging"], default="all")
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--ids-from", type=Path, help="Reuse public_video_ids from a previous report")
+    args = parser.parse_args()
+    if not 1 <= args.rounds <= 10:
+        parser.error("rounds must be between 1 and 10")
+    report = {"versions": {n: importlib.metadata.version(n) for n in ["ytmusicapi", "yt-dlp", "requests"]},
+              "python": sys.version.split()[0], "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+              "rounds": args.rounds, "samples": [], "loadavg": os.getloadavg()}
+    traces = []
+
+    def save():
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(report, indent=2) + "\n")
+
+    def run(name, index, function, summary, playback=False):
+        traces.clear()
+        started = time.perf_counter()
+        try:
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                value = function()
+            row = {"case": name, "round": index, "ms": ms(started), "ok": True, **summary(value)}
+            row["requests"] = list(traces)
+            if playback:
+                row.update(play_probe(value))
+        except Exception as error:
+            row = {"case": name, "round": index, "ms": ms(started), "ok": False,
+                   "error_type": type(error).__name__, "requests": list(traces)}
+            value = None
+        report["samples"].append(row)
+        save()
+        print(json.dumps({k: v for k, v in row.items() if k != "requests"}), flush=True)
+        return value
+
+    # Import/process costs without contacting YouTube.
+    for code, name in [("pass", "python-start"), ("import ytmusicapi", "import-ytmusicapi"),
+                       ("import yt_dlp", "import-ytdlp")]:
+        for index in range(args.rounds):
+            run(name, index, lambda: subprocess.run([sys.executable, "-c", code], check=True,
+                                                    capture_output=True), lambda _: {})
+
+    import requests
+    from ytmusicapi import YTMusic
+
+    class Session(requests.Session):
+        def send(self, request, **kwargs):
+            started = time.perf_counter()
+            try:
+                return super().send(request, **kwargs)
+            finally:
+                traces.append({"endpoint": endpoint(request.url), "ms": ms(started)})
+
+    def api():
+        session = Session()
+        original = session.request
+        session.request = lambda *a, **kw: original(*a, **{"timeout": 20, **kw})
+        return YTMusic(requests_session=session)
+
+    queries = ["Bill Evans Waltz for Debby", "Bach cello suite Yo Yo Ma", "Miles Davis So What",
+               "Debussy Clair de Lune", "Ella Fitzgerald Misty"]
+    shared_api = api()
+    video_ids = json.loads(args.ids_from.read_text())["public_video_ids"] if args.ids_from else []
+    if args.phase == "paging":
+        run("visitor-bootstrap", 0, lambda: shared_api.headers, lambda _: {})
+        for index in range(args.rounds):
+            query = queries[index % len(queries)]
+            limits = [1, 40] if index % 2 == 0 else [40, 1]
+            for limit in limits:
+                run(f"search-limit-{limit}", index,
+                    lambda: shared_api.search(query, filter="songs", limit=limit),
+                    lambda rows: {"rows": len(rows)})
+    if args.phase in {"all", "metadata"}:
+        for index in range(args.rounds):
+            query = queries[index % len(queries)]
+            cases = [
+                ("cold-helper-search", lambda: cold({"op": "search", "query": query, "filter": "songs"})["tracks"]),
+                ("fresh-YTMusic-search", lambda: api().search(query, filter="songs", limit=40)[:40]),
+                ("retained-YTMusic-search", lambda: shared_api.search(query, filter="songs", limit=40)[:40]),
+            ]
+            # Rotate order to avoid always favoring the last mode on server caches.
+            for name, function in cases[index % 3:] + cases[:index % 3]:
+                value = run(name, index, function, lambda rows: {"rows": len(rows)})
+                if name == "cold-helper-search" and value:
+                    video_ids.append(value[0]["id"])
+
+    if args.phase in {"all", "extract"}:
+        if not video_ids:
+            video_ids = [row["id"] for row in cold({"op": "search", "query": queries[0], "filter": "songs"})["tracks"][:3]]
+        report["public_video_ids"] = video_ids
+        from yt_dlp import YoutubeDL
+
+        class Downloader(YoutubeDL):
+            def urlopen(self, request):
+                started = time.perf_counter()
+                try:
+                    return super().urlopen(request)
+                finally:
+                    url = request if isinstance(request, str) else request.url
+                    traces.append({"endpoint": endpoint(url), "ms": ms(started)})
+
+        def downloader(cache=False, client=None):
+            options = {"format": "bestaudio/best", "quiet": True, "no_warnings": True,
+                       "logger": service.Quiet(), "skip_download": True, "noplaylist": True,
+                       "socket_timeout": 20, "retries": 1, "extractor_retries": 1,
+                       "cachedir": cache, "js_runtimes": {"deno": {}}}
+            if client:
+                options["extractor_args"] = {"youtube": {"player_client": [client]}}
+            return Downloader(options)
+
+        def extract(downloader, video_id):
+            info = downloader.extract_info(f"https://music.youtube.com/watch?v={video_id}", download=False)
+            return {"url": info["url"], "headers": {k: v for k, v in info.get("http_headers", {}).items()
+                    if k.lower() in {"user-agent", "referer", "origin", "accept"}},
+                    "codec": info.get("acodec"), "bitrate": info.get("abr"), "format": info.get("format_id")}
+
+        summary = lambda stream: {key: stream.get(key) for key in ["codec", "bitrate", "format"]}
+        with tempfile.TemporaryDirectory(prefix="uta-research-cache-") as cache:
+            with downloader() as retained:
+                for index in range(args.rounds):
+                    video_id = video_ids[index % len(video_ids)]
+
+                    def fresh(cache=False, client=None):
+                        with downloader(cache, client) as current:
+                            return extract(current, video_id)
+
+                    cases = [
+                        ("cold-helper-resolve", lambda: cold({"op": "resolve", "id": video_id})["stream"]),
+                        ("fresh-YoutubeDL", fresh),
+                        ("retained-YoutubeDL", lambda: extract(retained, video_id)),
+                        ("fresh-YoutubeDL-disk-cache", lambda: fresh(cache)),
+                    ]
+                    for name, function in cases[index % 4:] + cases[:index % 4]:
+                        run(name, index, function, summary, playback=True)
+                for client in ["web_music", "visionos", "web"]:
+                    run(f"client-{client}", 0, lambda: fresh(client=client), summary, playback=True)
+        for index, video_id in enumerate(video_ids[:3]):
+            def song_summary(song):
+                formats = song.get("streamingData", {}).get("adaptiveFormats", [])
+                return {"playability": song.get("playabilityStatus", {}).get("status"),
+                        "audio_direct_urls": sum(bool(f.get("url")) for f in formats if f.get("mimeType", "").startswith("audio/")),
+                        "ciphered_formats": sum(bool(f.get("signatureCipher")) for f in formats)}
+            run("YTMusic-get-song", index, lambda: shared_api.get_song(video_id), song_summary)
+    report["summary"] = {}
+    for name in dict.fromkeys(row["case"] for row in report["samples"]):
+        rows = [row for row in report["samples"] if row["case"] == name]
+        times = [row["ms"] for row in rows if row["ok"]]
+        report["summary"][name] = {"successes": len(times), "attempts": len(rows),
+                                   "median_ms": statistics.median(times) if times else None,
+                                   "min_ms": min(times) if times else None, "max_ms": max(times) if times else None}
+    save()
+
+
+if __name__ == "__main__":
+    main()

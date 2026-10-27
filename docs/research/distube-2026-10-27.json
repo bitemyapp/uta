@@ -1,0 +1,290 @@
+{
+  "version": "5.0.2",
+  "node": "v24.21.0",
+  "utc": "2026-10-27T22:49:46.554Z",
+  "import_ms": 11,
+  "loadavg": [
+    5.89,
+    2.85,
+    1.28
+  ],
+  "samples": [
+    {
+      "case": "default-info",
+      "round": 0,
+      "ms": 1801,
+      "ok": true,
+      "client": "visionos",
+      "formats": 23,
+      "requests": [
+        {
+          "endpoint": "bootstrap-or-other",
+          "ms": 95
+        },
+        {
+          "endpoint": "player",
+          "ms": 98
+        },
+        {
+          "endpoint": "player",
+          "ms": 99
+        },
+        {
+          "endpoint": "next",
+          "ms": 1574
+        }
+      ],
+      "rss_mib": 100
+    },
+    {
+      "case": "default-choose",
+      "round": 0,
+      "ms": 0,
+      "ok": true,
+      "itag": 251,
+      "codec": "opus",
+      "bitrate": 152,
+      "direct_url": true,
+      "client": "visionos",
+      "requests": [],
+      "rss_mib": 100
+    },
+    {
+      "case": "default-2MiB",
+      "round": 0,
+      "ms": 101,
+      "ok": true,
+      "bytes": 2097152,
+      "first_byte_ms": 67,
+      "media_ok": true,
+      "requests": [
+        {
+          "endpoint": "media",
+          "ms": 66
+        }
+      ],
+      "rss_mib": 102
+    },
+    {
+      "case": "default-mpv",
+      "round": 0,
+      "ms": 236,
+      "ok": true,
+      "playback": "advanced",
+      "mpv_ms": 175.63,
+      "requests": [],
+      "rss_mib": 102
+    },
+    {
+      "case": "default-info",
+      "round": 1,
+      "ms": 891,
+      "ok": true,
+      "client": "visionos",
+      "formats": 20,
+      "requests": [
+        {
+          "endpoint": "player",
+          "ms": 77
+        },
+        {
+          "endpoint": "player",
+          "ms": 64
+        },
+        {
+          "endpoint": "next",
+          "ms": 802
+        }
+      ],
+      "rss_mib": 104
+    },
+    {
+      "case": "default-choose",
+      "round": 1,
+      "ms": 0,
+      "ok": true,
+      "itag": 251,
+      "codec": "opus",
+      "bitrate": 143,
+      "direct_url": true,
+      "client": "visionos",
+      "requests": [],
+      "rss_mib": 104
+    },
+    {
+      "case": "default-2MiB",
+      "round": 1,
+      "ms": 147,
+      "ok": true,
+      "bytes": 2097152,
+      "first_byte_ms": 67,
+      "media_ok": true,
+      "requests": [
+        {
+          "endpoint": "media",
+          "ms": 66
+        }
+      ],
+      "rss_mib": 105
+    },
+    {
+      "case": "default-mpv",
+      "round": 1,
+      "ms": 241,
+      "ok": true,
+      "playback": "advanced",
+      "mpv_ms": 176.06,
+      "requests": [],
+      "rss_mib": 105
+    },
+    {
+      "case": "default-info",
+      "round": 2,
+      "ms": 722,
+      "ok": true,
+      "client": "visionos",
+      "formats": 20,
+      "requests": [
+        {
+          "endpoint": "player",
+          "ms": 62
+        },
+        {
+          "endpoint": "player",
+          "ms": 110
+        },
+        {
+          "endpoint": "next",
+          "ms": 652
+        }
+      ],
+      "rss_mib": 106
+    },
+    {
+      "case": "default-choose",
+      "round": 2,
+      "ms": 0,
+      "ok": true,
+      "itag": 251,
+      "codec": "opus",
+      "bitrate": 140,
+      "direct_url": true,
+      "client": "visionos",
+      "requests": [],
+      "rss_mib": 106
+    },
+    {
+      "case": "default-2MiB",
+      "round": 2,
+      "ms": 88,
+      "ok": true,
+      "bytes": 2097152,
+      "first_byte_ms": 34,
+      "media_ok": true,
+      "requests": [
+        {
+          "endpoint": "media",
+          "ms": 34
+        }
+      ],
+      "rss_mib": 106
+    },
+    {
+      "case": "default-mpv",
+      "round": 2,
+      "ms": 243,
+      "ok": true,
+      "playback": "advanced",
+      "mpv_ms": 178.35,
+      "requests": [],
+      "rss_mib": 106
+    },
+    {
+      "case": "mweb-info",
+      "round": 0,
+      "ms": 2186,
+      "ok": true,
+      "client": "mweb",
+      "formats": 24,
+      "requests": [
+        {
+          "endpoint": "bootstrap-or-other",
+          "ms": 42
+        },
+        {
+          "endpoint": "player-js",
+          "ms": 8
+        },
+        {
+          "endpoint": "bootstrap-or-other",
+          "ms": 40
+        },
+        {
+          "endpoint": "bootstrap-or-other",
+          "ms": 112
+        },
+        {
+          "endpoint": "bootstrap-or-other",
+          "ms": 43
+        },
+        {
+          "endpoint": "bootstrap-or-other",
+          "ms": 22
+        },
+        {
+          "endpoint": "player",
+          "ms": 284
+        },
+        {
+          "endpoint": "next",
+          "ms": 664
+        }
+      ],
+      "rss_mib": 592
+    },
+    {
+      "case": "mweb-choose",
+      "round": 0,
+      "ms": 0,
+      "ok": true,
+      "itag": 251,
+      "codec": "opus",
+      "bitrate": 152,
+      "direct_url": true,
+      "client": "mweb",
+      "requests": [],
+      "rss_mib": 592
+    },
+    {
+      "case": "mweb-2MiB",
+      "round": 0,
+      "ms": 13,
+      "ok": true,
+      "bytes": 2097152,
+      "first_byte_ms": 3,
+      "media_ok": true,
+      "requests": [
+        {
+          "endpoint": "media",
+          "ms": 3
+        }
+      ],
+      "rss_mib": 594
+    },
+    {
+      "case": "mweb-mpv",
+      "round": 0,
+      "ms": 240,
+      "ok": true,
+      "playback": "advanced",
+      "mpv_ms": 174.15,
+      "requests": [],
+      "rss_mib": 594
+    }
+  ],
+  "public_video_ids": [
+    "xqX3oiaxYcc",
+    "ErsVeQfjeTU",
+    "KJEzFvXx3Xw"
+  ]
+}

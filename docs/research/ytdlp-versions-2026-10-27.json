@@ -1,0 +1,59 @@
+{
+  "utc": "2026-10-27T22:54:26Z",
+  "public_video_ids": [
+    "xqX3oiaxYcc",
+    "ErsVeQfjeTU"
+  ],
+  "samples": [
+    {
+      "round": 0,
+      "version": "2026.8.19",
+      "resolve_ms": 1139.5,
+      "format": "251",
+      "protocol": "https",
+      "client": "VISIONOS",
+      "media_status": 206,
+      "bytes": 2097152,
+      "media_ok": true,
+      "playback": "advanced",
+      "mpv_ms": 175.11
+    },
+    {
+      "round": 0,
+      "version": "2026.10.26",
+      "resolve_ms": 1942.87,
+      "format": "251",
+      "protocol": "https",
+      "client": "TVHTML5",
+      "media_status": 403,
+      "bytes": 0,
+      "media_ok": false,
+      "playback": "media-failed"
+    },
+    {
+      "round": 1,
+      "version": "2026.10.26",
+      "resolve_ms": 1903.64,
+      "format": "251",
+      "protocol": "https",
+      "client": "TVHTML5",
+      "media_status": 403,
+      "bytes": 0,
+      "media_ok": false,
+      "playback": "media-failed"
+    },
+    {
+      "round": 1,
+      "version": "2026.8.19",
+      "resolve_ms": 972.15,
+      "format": "251",
+      "protocol": "https",
+      "client": "VISIONOS",
+      "media_status": 206,
+      "bytes": 2097152,
+      "media_ok": true,
+      "playback": "advanced",
+      "mpv_ms": 175.89
+    }
+  ]
+}
