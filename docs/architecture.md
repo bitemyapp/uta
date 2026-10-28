@@ -8,13 +8,14 @@ key and exports its menus to the shell's menu bar and command palette.
 
 ## Service boundary
 
-The optional `rustypipe` feature adds a retained Rust adapter for anonymous
-filtered search, collections, radio and audio resolution. Account requests,
-Top search and unsupported operations keep the helper below. Extraction errors
-fall back to it; a native URL rejected at playback startup is evicted and retried
-once through yt-dlp with a new player generation. See the
-[integration report](rustypipe-integration.md) for exact routing, the vendored
-VisionOS patch, licensing and measurements. The ordinary build is unchanged.
+The optional `rustypipe` feature adds retained Rust clients for anonymous public
+search/collections/radio and authenticated Premium playback. The default build
+remains Python-based. A separate in-memory account client imports the saved session
+through the helper and preserves its account index. It is invalidated on account
+operations or credential expiry; no RustyPipe credential cache is written to disk.
+Native failures fall back to the Python helper while preserving the requested
+playback authentication. `--ignore-credentials` blocks account reads and writes
+and uses an isolated instance and queue. See the [integration guide](premium-playback.md).
 
 `service/uta_service.py` accepts a bounded JSON request on stdin and returns
 one JSON response on stdout. Rust embeds this source into the executable.
@@ -109,7 +110,7 @@ An actor supervises mpv and controls it over a Unix socket inside a private
 temporary directory. A new load replaces the previous mpv process, giving
 events an unambiguous playback generation. Stream URLs travel over the
 socket. Only a small allowlist of transport headers reaches mpv; session
-cookies remain in the service helper. mpv loads no user configuration and
+cookies remain in the service adapters. mpv loads no user configuration and
 does not run its own YouTube extraction.
 
 MPRIS exports track metadata and controls on `org.mpris.MediaPlayer2.uta`.

@@ -768,6 +768,13 @@ def account_extractor(authuser):
             self._extract_session_index(config)
             return page
 
+        def _get_requested_clients(self, url, smuggled_data, is_premium_subscriber):
+            # Premium can use the fast Music client without a media PO token.
+            # Other signed-in accounts need yt-dlp's broader authenticated policy.
+            if is_premium_subscriber:
+                return ["web_music"]
+            return super()._get_requested_clients(url, smuggled_data, is_premium_subscriber)
+
         @staticmethod
         def _extract_session_index(*data):
             actual = YoutubeIE._extract_session_index(*data)
@@ -787,7 +794,7 @@ def resolve(video_id, saved):
         auth_headers(jar)  # Reject an expired session before any anonymous fallback.
     options = {
         "format": "bestaudio/best",
-        "extractor_args": {"youtube": {"player_client": ["web_music"]}} if saved else {}, "quiet": True, "no_warnings": True,
+        "quiet": True, "no_warnings": True,
         "logger": Quiet(), "skip_download": True, "noplaylist": True,
         "socket_timeout": 20, "retries": 1, "extractor_retries": 1,
         "cachedir": False, "js_runtimes": {"deno": {}},

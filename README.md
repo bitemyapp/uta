@@ -80,9 +80,9 @@ computer:
 - **Choose folder…** opens the profile folder of a browser that Uta doesn't
   know, or one kept elsewhere.
 
-A browser signed in to several Google accounts connects the first one. A
-request copied from the developer tools connects the account it was made for.
-A separate browser profile or Firefox container also works.
+A browser signed in to several Google accounts connects the account active in
+YouTube Music. A request copied from the developer tools preserves its explicit
+account selection. A separate browser profile or Firefox container also works.
 
 A running Secret Service desktop keyring, such as GNOME Keyring, is required
 to save the session. Uta retains only YouTube cookies, stored in the desktop
@@ -130,11 +130,18 @@ can hold up to 5,000 songs.
 
 ## Develop and test
 
-An opt-in [RustyPipe integration trial](docs/rustypipe-integration.md) accelerates
-anonymous audio resolution and filtered searches. Run `nix run .#uta-rustypipe`
-or build with `--features rustypipe`. Account operations retain the established
-service; the trial executable includes GPL-3.0-only code. The report includes
-before/after latency numbers and testing instructions.
+The opt-in [RustyPipe integration](docs/premium-playback.md) provides retained
+native clients for public browsing and anonymous or authenticated Premium audio.
+Run `nix run .#uta-rustypipe` or build with `--features rustypipe`. Library and
+account operations retain the Python helper, which also handles fallback.
+The default package remains Python-based; merging the integration does not change
+that default. CI and flake checks build and test both packages.
+
+Use `--ignore-credentials` for an isolated anonymous window and `--backend python`
+to compare the helper. The native build includes an ABBA playback benchmark;
+[measurements and limitations](docs/premium-latency-results.md) cover Premium and
+anonymous playback, cold startup, and session expiry. The native executable
+includes GPL-3.0-only code.
 
 `nix build` assembles the pinned Aizome and Sidestep sources automatically.
 For Cargo development, the repositories sit beside one another:
@@ -188,5 +195,7 @@ script and run `python3 data/genicon.py data` rather than editing the SVG.
 
 ## License
 
-MIT OR Apache-2.0, matching Aizome. See [LICENSE-MIT](LICENSE-MIT) and
-[LICENSE-APACHE](LICENSE-APACHE).
+Uta's own source is MIT OR Apache-2.0, matching Aizome. See
+[LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE).
+The optional RustyPipe dependency is GPL-3.0-only; combined native builds are
+packaged under that license. See [vendor provenance and licenses](vendor/README.md).

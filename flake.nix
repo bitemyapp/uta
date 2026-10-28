@@ -34,7 +34,7 @@
           AIZOME_FONT_DIR = aizome.packages.${pkgs.stdenv.hostPlatform.system}.fonts;
         };
       });
-      checks = each (pkgs: { inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) uta; });
+      checks = each (pkgs: { inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) uta uta-rustypipe; });
       nixosModules.default = { config, lib, pkgs, ... }: {
         options.programs.uta.enable = lib.mkEnableOption "Uta, the native YouTube Music client for Aizome";
         config = lib.mkIf config.programs.uta.enable {

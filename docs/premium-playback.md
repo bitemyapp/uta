@@ -35,7 +35,8 @@ YouTube granted Premium or returned a particular quality. Check the actual forma
 - Account discovery, connecting, library synchronization and likes use the existing
   helper. Empty anonymous collections retry with the account to handle private lists.
 - Native resolution/initial media transport failure falls back to authenticated
-  yt-dlp `web_music`, preserving the selected account. It never substitutes anonymous
+  yt-dlp, preserving the selected account. Detected Premium accounts use
+  `web_music`; other accounts retain yt-dlp's authenticated client selection. It never substitutes anonymous
   playback for a connected request. Mid-song failures do not restart playback.
 - Native credentials expire after at most 30 minutes (earlier for expiring cookies).
   Status, connect and disconnect invalidate that in-memory client. Credentials and
@@ -121,3 +122,8 @@ fixes, has executable SHA-256
 Its Nix package checks and all 29 Python tests passed on `wx-workstation`.
 The local executable hash matches the workstation package. Reopen Uta to load it;
 use Account → Reconnect if Google has rotated the saved browser session.
+
+CI and `nix flake check` cover both the default `uta` package and `uta-rustypipe`.
+The integration remains opt-in. Live non-Premium authenticated playback has not
+been validated in this trial; its helper retains upstream client selection rather
+than the Premium-only Music restriction.

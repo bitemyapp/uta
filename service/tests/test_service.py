@@ -83,6 +83,16 @@ class ServiceTests(unittest.TestCase):
             extractor._download_webpage("https://music.youtube.com/", "id", query={"keep": "yes"})
             self.assertEqual(fetch.call_args.kwargs["query"], {"keep": "yes", "authuser": "2"})
 
+    def test_music_only_client_is_limited_to_premium_accounts(self):
+        from yt_dlp.extractor.youtube import YoutubeIE
+        extractor = service.account_extractor("1")
+        with patch.object(YoutubeIE, "_get_requested_clients", return_value=["web_embedded", "tv_downgraded", "web", "web_music"]) as policy:
+            url = "https://music.youtube.com/watch?v=abcdefghijk"
+            self.assertEqual(extractor._get_requested_clients(url, {}, True), ["web_music"])
+            policy.assert_not_called()
+            self.assertEqual(extractor._get_requested_clients(url, {}, False), ["web_embedded", "tv_downgraded", "web", "web_music"])
+            policy.assert_called_once_with(url, {}, False)
+
     def test_revoked_cookie_session_stops_before_player_extraction(self):
         from yt_dlp.extractor.youtube import YoutubeIE
         extractor = service.account_extractor("1")
