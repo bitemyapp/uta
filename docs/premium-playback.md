@@ -42,8 +42,10 @@ YouTube granted Premium or returned a particular quality. Check the actual forma
   media URLs are redacted from diagnostics and never included in benchmark JSON.
 
 Both native and helper paths depend on YouTube's unofficial interfaces. Premium
-formats and brand/multiple-account behavior require validation with the actual
-connected account. No personal session was used for pre-install verification.
+Opus 774 is now validated with the connected account; other brand-account cases
+remain untested. No personal session was used for the initial pre-install verification.
+Browser connection now follows the account active in YouTube Music, while an explicit
+account from pasted headers takes precedence.
 
 ## Side-by-side and ABBA
 
@@ -92,7 +94,8 @@ nix develop --command cargo test --features rustypipe --test network -- --ignore
 UTA_TEST_PLAYER_JS=/tmp/uta-current-player.js nix develop --command cargo test --release --features rustypipe --test solver -- --ignored
 ```
 
-Authenticated latency and Premium media validation are pending local sign-in.
+Authenticated latency and Premium media validation are complete. See
+[the results and account-selection fix](premium-latency-results.md).
 
 Pre-install workstation checks passed: Rust tests with and without the feature,
 26 Python tests, Clippy, all three public network checks (including WEB_REMIX),
@@ -106,8 +109,15 @@ played all four samples with the same Opus format 251 (127.8 kbps). Native resol
 was 595 ms cold / 88 ms warm; helper samples were 1,504 / 1,414 ms. This single block
 verifies the runner, not a statistically robust latency estimate.
 
-Installed executable SHA-256:
+Initial installed executable SHA-256 (used for the latency measurements):
 `30eba26d1ed0a54aa6a25c18a8aa64c4a0d0613f4bb0dd352e23cd097866c395`.
 The copied executable matched the workstation output; the local launcher reports
 `Uta 0.1.0 (RustyPipe: true)`. Installation registered nine runtime GC roots and the
 application-menu entry. Local verification used only `--version` and `--help`.
+
+Current persistent installation, including the active-account and expired-session
+fixes, has executable SHA-256
+`8b61fb5200aab350bb891c1d1aaee1c519b065c41d0cef80527056d7d3eca685`.
+Its Nix package checks and all 29 Python tests passed on `wx-workstation`.
+The local executable hash matches the workstation package. Reopen Uta to load it;
+use Account → Reconnect if Google has rotated the saved browser session.

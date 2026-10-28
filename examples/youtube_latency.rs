@@ -102,18 +102,23 @@ fn main() {
         "jy5x7bDYd4o",
     ];
     let native = Native::new().expect("native service");
+    let authenticated = std::env::args().any(|arg| arg == "--authenticated");
     if std::env::args().any(|arg| arg == "--full-track") {
         let id = "jy5x7bDYd4o";
         let stream = native
-            .call_native(&Request::Resolve { id: id.into() })
+            .call_native_mode(&Request::Resolve { id: id.into() }, authenticated)
             .unwrap()
             .stream
             .unwrap();
+        let media = media(&stream);
         let result = playback(&stream, true);
         println!(
             "{}",
-            json!({"id": id, "backend": "rustypipe", "playback": result})
+            json!({"id": id, "backend": "rustypipe", "authenticated":authenticated,
+                "codec":stream.codec, "bitrate":stream.bitrate, "format_id":stream.format_id,
+                "media":media, "playback": result})
         );
+        assert_eq!(media["ok"], true, "media range must be readable");
         assert_eq!(result["ended"], true, "track must finish normally");
         assert!(result["last_position"].as_f64().unwrap() > 60.0);
         return;

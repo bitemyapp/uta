@@ -629,14 +629,32 @@ def music(saved=None):
     return YTMusic()
 
 
+def active_account_index(jar):
+    """Follow the account selected in Music, not Google's first signed-in account."""
+    request = urllib.request.Request("https://music.youtube.com/", headers={
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0",
+        "Accept-Language": "en-US,en;q=0.9"})
+    jar.add_cookie_header(request)
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            page = response.read(8 * 1024 * 1024).decode("utf-8", errors="replace")
+    except Exception:
+        raise UserError("Could not identify the active YouTube Music account. Open Music in that browser and try again.") from None
+    index = re.search(r'"SESSION_INDEX"\s*:\s*"?([0-9]{1,3})"?\s*[,}]', page)
+    if not index or not re.search(r'"LOGGED_IN"\s*:\s*true', page):
+        raise UserError("YouTube Music did not identify a signed-in account. Open Music in that browser and try again.")
+    return index.group(1)
+
+
 def connect(cookies, source, authuser=None):
     """Check the cookies with YouTube, then replace the saved session."""
     vault = keyring(create=True)
-    session = {"cookies": encode_cookies(cookies), "authuser": authuser or "0", "source": source}
+    session = {"cookies": encode_cookies(cookies), "source": source}
     if not any(c["name"] == SESSION for c in session["cookies"]):
         if source.get("id"):
             raise UserError(f"{source['label']} isn't signed in to YouTube. Sign in at music.youtube.com there, then connect again.")
         raise UserError("That has no YouTube sign-in. Copy a request to music.youtube.com from your browser's developer tools, or export its cookies.txt, then try again.")
+    session["authuser"] = authuser if authuser is not None else active_account_index(decode_cookies(session["cookies"]))
     try:
         session["account"] = music(session).get_account_info().get("accountName") or "YouTube account"
     except Exception:
@@ -740,6 +758,15 @@ def account_extractor(authuser):
             if isinstance(url, str) and youtube_host(urlsplit(url).hostname or ""):
                 kwargs["query"] = {**(kwargs.get("query") or {}), "authuser": authuser}
             return super()._download_webpage(url, *args, **kwargs)
+
+        def _download_initial_webpage(self, webpage_url, webpage_client, video_id):
+            page = super()._download_initial_webpage(webpage_url, webpage_client, video_id)
+            config = self.extract_ytcfg(video_id, page)
+            # Cookie presence alone is insufficient: Google may have revoked it.
+            if config.get("LOGGED_IN") is not True or "SESSION_INDEX" not in config:
+                raise UserError("YouTube has signed this session out. Reconnect your account from the Account page.")
+            self._extract_session_index(config)
+            return page
 
         @staticmethod
         def _extract_session_index(*data):
