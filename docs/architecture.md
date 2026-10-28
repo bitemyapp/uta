@@ -8,9 +8,10 @@ key and exports its menus to the shell's menu bar and command palette.
 
 ## Service boundary
 
-The optional `rustypipe` feature adds retained Rust clients for anonymous public
-search/collections/radio and authenticated Premium playback. The default build
-remains Python-based. A separate in-memory account client imports the saved session
+The default `rustypipe` feature adds retained Rust clients for anonymous public
+search/collections/radio and authenticated Premium playback. Python-only builds
+remain available with `--no-default-features` or `nix build .#uta-python`.
+A separate in-memory account client imports the saved session
 through the helper and preserves its account index. It is invalidated on account
 operations or credential expiry; no RustyPipe credential cache is written to disk.
 Native failures fall back to the Python helper while preserving the requested

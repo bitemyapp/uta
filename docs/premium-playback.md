@@ -1,4 +1,4 @@
-# Persistent RustyPipe playback trial
+# Persistent RustyPipe playback
 
 Branch: `research/rustypipe-premium`, based on `research/rustypipe-native`.
 The earlier [anonymous latency report](rustypipe-integration.md) is historical;
@@ -6,7 +6,11 @@ its numbers are not Premium measurements.
 
 ## Install and connect
 
-Build `nix build .#uta-rustypipe` on `wx-workstation`. The locally installed
+RustyPipe is enabled by default in Cargo, the Nix package and the NixOS module.
+`uta-rustypipe` remains a compatibility alias; `uta-python` builds without RustyPipe.
+The default executable can also select the helper with `--backend python`.
+
+Build `nix build` on `wx-workstation`. The locally installed
 command is `~/.local/bin/aizome-uta`, also available as **Uta** in the application
 launcher. Installation lives under `~/.local/share/aizome/uta/builds/`, with a
 `current` symlink and user GC roots for the Nix runtime dependencies. It survives
@@ -123,7 +127,7 @@ Its Nix package checks and all 29 Python tests passed on `wx-workstation`.
 The local executable hash matches the workstation package. Reopen Uta to load it;
 use Account → Reconnect if Google has rotated the saved browser session.
 
-CI and `nix flake check` cover both the default `uta` package and `uta-rustypipe`.
-The integration remains opt-in. Live non-Premium authenticated playback has not
+CI and `nix flake check` cover both the default native `uta` package and `uta-python`.
+CI checks the reported backend feature for each package. Live non-Premium authenticated playback has not
 been validated in this trial; its helper retains upstream client selection rather
 than the Premium-only Music restriction.

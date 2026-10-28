@@ -8,7 +8,9 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/bitemyapp/uta"
 
 [features]
-# Opt-in: binaries linking RustyPipe are subject to GPL-3.0-only.
+# Default binaries link RustyPipe and are subject to GPL-3.0-only.
+# Use --no-default-features for a Python-only build.
+default = ["rustypipe"]
 rustypipe = ["dep:rustypipe", "dep:tokio"]
 
 [dependencies]

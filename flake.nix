@@ -22,7 +22,8 @@
           fonts = aizome.packages.${pkgs.stdenv.hostPlatform.system}.fonts;
         };
         default = uta;
-        uta-rustypipe = uta.override { enableRustyPipe = true; };
+        uta-rustypipe = uta; # Compatibility with the original trial command.
+        uta-python = uta.override { enableRustyPipe = false; };
       });
       apps = each (pkgs: {
         default = { type = "app"; program = "${self.packages.${pkgs.stdenv.hostPlatform.system}.uta}/bin/aizome-uta"; };
@@ -34,7 +35,7 @@
           AIZOME_FONT_DIR = aizome.packages.${pkgs.stdenv.hostPlatform.system}.fonts;
         };
       });
-      checks = each (pkgs: { inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) uta uta-rustypipe; });
+      checks = each (pkgs: { inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) uta uta-python; });
       nixosModules.default = { config, lib, pkgs, ... }: {
         options.programs.uta.enable = lib.mkEnableOption "Uta, the native YouTube Music client for Aizome";
         config = lib.mkIf config.programs.uta.enable {

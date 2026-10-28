@@ -1,5 +1,5 @@
 { lib, rustPlatform, runCommand, makeWrapper, mpv, deno, dbus, fontconfig, wayland,
-  src, aizome, sidestep, python, fonts, enableRustyPipe ? false }:
+  src, aizome, sidestep, python, fonts, enableRustyPipe ? true }:
 let
   source = runCommand "uta-source" { } ''
     mkdir -p $out
@@ -15,6 +15,7 @@ in rustPlatform.buildRustPackage {
   src = source;
   sourceRoot = "uta-source/uta";
   cargoLock.lockFile = ../Cargo.lock;
+  buildNoDefaultFeatures = true;
   buildFeatures = lib.optionals enableRustyPipe [ "rustypipe" ];
   nativeBuildInputs = [ makeWrapper python dbus ];
   AIZOME_FONT_DIR = fonts;

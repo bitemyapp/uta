@@ -130,12 +130,13 @@ can hold up to 5,000 songs.
 
 ## Develop and test
 
-The opt-in [RustyPipe integration](docs/premium-playback.md) provides retained
+The default [RustyPipe integration](docs/premium-playback.md) provides retained
 native clients for public browsing and anonymous or authenticated Premium audio.
-Run `nix run .#uta-rustypipe` or build with `--features rustypipe`. Library and
+Run `nix run` or build with Cargo's default features. Library and
 account operations retain the Python helper, which also handles fallback.
-The default package remains Python-based; merging the integration does not change
-that default. CI and flake checks build and test both packages.
+For a build without RustyPipe, use `nix run .#uta-python` or Cargo's
+`--no-default-features`. `uta-rustypipe` remains an alias for the default package.
+CI and flake checks build and test both the default and Python-only packages.
 
 Use `--ignore-credentials` for an isolated anonymous window and `--backend python`
 to compare the helper. The native build includes an ABBA playback benchmark;
@@ -197,5 +198,5 @@ script and run `python3 data/genicon.py data` rather than editing the SVG.
 
 Uta's own source is MIT OR Apache-2.0, matching Aizome. See
 [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE).
-The optional RustyPipe dependency is GPL-3.0-only; combined native builds are
+The RustyPipe dependency, enabled by default, is GPL-3.0-only; combined native builds are
 packaged under that license. See [vendor provenance and licenses](vendor/README.md).

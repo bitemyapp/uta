@@ -19,10 +19,11 @@ which failed both mpv and a 2 MiB media read with HTTP 403 on the test network.
 The TV/desktop paths also failed extraction. The patched client is tested for
 actual media delivery, not just successful API responses.
 
-The dependency is optional. Uta's own source remains MIT OR Apache-2.0; the
-combined executable built with `--features rustypipe` includes GPL-3.0-only code.
-The `uta-rustypipe` Nix package declares that license. The ordinary package does
-not link this library. Keep the upstream license and this provenance with the
+The dependency is enabled by default. Uta's own source remains MIT OR Apache-2.0;
+the combined executable includes GPL-3.0-only code. The default `uta` Nix package
+and its `uta-rustypipe` alias declare that license. `uta-python` and Cargo builds
+with `--no-default-features` do not link this library.
+Keep the upstream license and this provenance with the
 vendored source; do not describe the combined build as exclusively permissive.
 
 ## Premium branch additions
