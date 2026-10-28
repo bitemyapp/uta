@@ -25,6 +25,7 @@ struct Fixture {
     sources: Mutex<Vec<Source>>,
     /// Streams whose signed URLs expire within a minute.
     short_lived: bool,
+    native_resolution: bool,
 }
 
 fn source(id: &str, browser: &str, profile: &str, signed_in: bool, used: f64) -> Source {
@@ -98,6 +99,7 @@ impl Service for Fixture {
     }
     fn call(&self, request: Request, auth: bool) -> Result<Reply, String> {
         self.calls.lock().unwrap().push((request.clone(), auth));
+        let native = self.native_resolution && matches!(request, Request::Resolve { .. });
         let connected = |source: &str| Reply {
             connected: true,
             account: "Test listener".into(),
@@ -154,7 +156,7 @@ impl Service for Fixture {
             }
             Request::ConnectText { .. } => connected("Copied from your browser"),
             Request::Disconnect | Request::Rate { .. } => Reply::default(),
-            Request::Resolve { id } => Reply {
+            Request::Resolve { id } | Request::ResolveFallback { id } => Reply {
                 stream: Some(Stream {
                     // Signed like YouTube's: good for six hours, or a minute.
                     url: format!(
@@ -164,6 +166,7 @@ impl Service for Fixture {
                     codec: "opus".into(),
                     bitrate: 251.0,
                     authenticated: auth,
+                    native,
                     ..Stream::default()
                 }),
                 ..Reply::default()
@@ -813,4 +816,120 @@ fn signed_urls_say_when_they_expire_and_the_queue_says_what_is_next() {
     assert_eq!(queue.peek_next().unwrap().id, demo_tracks()[0].id);
     queue.current = Some(2);
     assert_eq!(queue.peek_next().unwrap().id, demo_tracks()[3].id);
+}
+
+fn native_app() -> (Harness<Uta>, Arc<Fixture>) {
+    let fixture = Arc::new(Fixture {
+        native_resolution: true,
+        ..Fixture::default()
+    });
+    let mut h = Harness::new(Uta::new(fixture.clone(), None, false));
+    search(&mut h);
+    h.send(Msg::Play(0));
+    (h, fixture)
+}
+
+fn fallback_calls(fixture: &Fixture) -> usize {
+    fixture
+        .requests()
+        .iter()
+        .filter(|r| matches!(r, Request::ResolveFallback { .. }))
+        .count()
+}
+
+#[test]
+fn native_transport_failure_retries_once_and_replaces_the_failed_cached_url() {
+    let (mut h, fixture) = native_app();
+    let first = h.program().play_generation;
+    h.send(Msg::Player(Event {
+        generation: first,
+        kind: EventKind::Failed("403".into()),
+    }));
+    assert_eq!(fallback_calls(&fixture), 1);
+    assert!(h.program().error.is_none());
+    assert_eq!(h.program().playback, Playback::Resolving);
+    let retry = h.program().play_generation;
+    assert_ne!(retry, first);
+    // A late event from the failed player must not stop the retry.
+    h.send(Msg::Player(Event {
+        generation: first,
+        kind: EventKind::Failed("late".into()),
+    }));
+    assert_eq!(h.program().playback, Playback::Resolving);
+    // A failure from the fallback is reported, without an extraction loop.
+    h.send(Msg::Player(Event {
+        generation: retry,
+        kind: EventKind::Failed("fallback failed".into()),
+    }));
+    assert_eq!(fallback_calls(&fixture), 1);
+    assert_eq!(h.program().error.as_deref(), Some("fallback failed"));
+    h.send(Msg::Play(0));
+    let generation = h.program().play_generation;
+    h.send(Msg::Player(Event {
+        generation,
+        kind: EventKind::Failed("cached fallback failed".into()),
+    }));
+    assert_eq!(
+        fallback_calls(&fixture),
+        1,
+        "cache now holds the fallback, not the rejected native URL"
+    );
+}
+
+#[test]
+fn native_transport_failure_after_playback_does_not_restart_the_song() {
+    let (mut h, fixture) = native_app();
+    let generation = h.program().play_generation;
+    h.send(Msg::Player(Event {
+        generation,
+        kind: EventKind::Started,
+    }));
+    h.send(Msg::Player(Event {
+        generation,
+        kind: EventKind::Position(4.0),
+    }));
+    h.send(Msg::Player(Event {
+        generation,
+        kind: EventKind::Failed("network lost".into()),
+    }));
+    assert_eq!(fallback_calls(&fixture), 0);
+    assert_eq!(h.program().error.as_deref(), Some("network lost"));
+}
+
+#[test]
+fn skipped_native_stream_cannot_trigger_fallback_for_the_next_track() {
+    let (mut h, fixture) = native_app();
+    let generation = h.program().play_generation;
+    h.send(Msg::Next);
+    h.send(Msg::Player(Event {
+        generation,
+        kind: EventKind::Failed("obsolete".into()),
+    }));
+    assert_eq!(fallback_calls(&fixture), 0);
+    assert_eq!(h.program().queue.current, Some(1));
+    assert!(h.program().error.is_none());
+}
+
+#[test]
+fn authenticated_native_transport_failure_keeps_authentication_for_fallback() {
+    let fixture = Arc::new(Fixture {
+        native_resolution: true,
+        connected: true,
+        ..Default::default()
+    });
+    let mut h = Harness::new(Uta::new(fixture.clone(), None, false));
+    search(&mut h);
+    h.send(Msg::Play(0));
+    let generation = h.program().play_generation;
+    h.send(Msg::Player(Event {
+        generation,
+        kind: EventKind::Failed("403".into()),
+    }));
+    let calls = fixture.calls.lock().unwrap();
+    let retries: Vec<_> = calls
+        .iter()
+        .filter(|(r, _)| matches!(r, Request::ResolveFallback { .. }))
+        .collect();
+    assert_eq!(retries.len(), 1);
+    assert!(retries[0].1);
 }

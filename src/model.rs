@@ -51,7 +51,11 @@ pub struct Stream {
     pub headers: std::collections::BTreeMap<String, String>,
     pub codec: String,
     pub bitrate: f64,
+    pub format_id: String,
+    pub client: String,
     pub authenticated: bool,
+    /// A native URL can retry through the established extractor if mpv rejects it.
+    pub native: bool,
 }
 
 impl std::fmt::Debug for Stream {

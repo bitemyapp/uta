@@ -27,6 +27,83 @@ def session():
 
 
 class ServiceTests(unittest.TestCase):
+    def test_browser_connection_follows_active_music_account_and_paste_keeps_explicit_account(self):
+        vault, api = Mock(), Mock()
+        api.get_account_info.return_value = {"accountName": "Active listener"}
+        with patch.object(service, "keyring", return_value=vault), patch.object(service, "music", return_value=api) as music, patch.object(service, "active_account_index", return_value="1") as active:
+            service.connect([cookie(".youtube.com")], {"label": "Chrome"})
+            self.assertEqual(music.call_args.args[0]["authuser"], "1")
+            self.assertEqual(vault.save.call_args.args[0]["authuser"], "1")
+            active.assert_called_once()
+            active.reset_mock()
+            service.connect([cookie(".youtube.com")], {"label": "Pasted"}, authuser="0")
+            self.assertEqual(vault.save.call_args.args[0]["authuser"], "0")
+            active.assert_not_called()
+
+    def test_active_account_lookup_requires_a_valid_logged_in_index(self):
+        jar = service.decode_cookies(session()["cookies"])
+        for page, expected in [(b'{"LOGGED_IN":true,"SESSION_INDEX":"1"}', "1"),
+                               (b'{"SESSION_INDEX":2,"LOGGED_IN":true}', "2"),
+                               (b'{"LOGGED_IN":false,"SESSION_INDEX":"0"}', None),
+                               (b'{"LOGGED_IN":true,"SESSION_INDEX":"1000"}', None)]:
+            response = Mock()
+            response.__enter__ = Mock(return_value=response)
+            response.__exit__ = Mock(return_value=False)
+            response.read.return_value = page
+            with patch.object(service.urllib.request, "urlopen", return_value=response):
+                if expected is None:
+                    with self.assertRaises(service.UserError): service.active_account_index(jar)
+                else:
+                    self.assertEqual(service.active_account_index(jar), expected)
+
+    def test_native_session_requires_auth_and_preserves_selection_and_expiry(self):
+        saved = session()
+        saved["authuser"] = "2"
+        with patch.object(service, "saved_session", return_value=saved):
+            result = service.handle({"op": "native_session", "authenticated": True})
+            self.assertEqual(result["credentials"]["authuser"], "2")
+            self.assertIn("__Secure-3PAPISID=", result["credentials"]["cookie"])
+            self.assertLessEqual(result["credentials"]["expires"], time.time() + 1800)
+        with patch.object(service, "keyring", side_effect=AssertionError("no keyring")):
+            with self.assertRaises(service.UserError):
+                service.handle({"op": "native_session", "authenticated": False})
+        saved["authuser"] = "0\r\nCookie: bad"
+        with patch.object(service, "saved_session", return_value=saved):
+            with self.assertRaises(service.UserError):
+                service.handle({"op": "native_session", "authenticated": True})
+
+    def test_fallback_preserves_selected_account_and_refuses_a_mismatch(self):
+        from yt_dlp.extractor.youtube import YoutubeIE
+        extractor = service.account_extractor("2")
+        self.assertEqual(extractor.ie_key(), "Youtube")
+        self.assertEqual(extractor._extract_session_index({"SESSION_INDEX": "2"}), 2)
+        with self.assertRaises(service.UserError):
+            extractor._extract_session_index({"SESSION_INDEX": "0"})
+        with patch.object(YoutubeIE, "_download_webpage", return_value="html") as fetch:
+            extractor._download_webpage("https://music.youtube.com/", "id", query={"keep": "yes"})
+            self.assertEqual(fetch.call_args.kwargs["query"], {"keep": "yes", "authuser": "2"})
+
+    def test_music_only_client_is_limited_to_premium_accounts(self):
+        from yt_dlp.extractor.youtube import YoutubeIE
+        extractor = service.account_extractor("1")
+        with patch.object(YoutubeIE, "_get_requested_clients", return_value=["web_embedded", "tv_downgraded", "web", "web_music"]) as policy:
+            url = "https://music.youtube.com/watch?v=abcdefghijk"
+            self.assertEqual(extractor._get_requested_clients(url, {}, True), ["web_music"])
+            policy.assert_not_called()
+            self.assertEqual(extractor._get_requested_clients(url, {}, False), ["web_embedded", "tv_downgraded", "web", "web_music"])
+            policy.assert_called_once_with(url, {}, False)
+
+    def test_revoked_cookie_session_stops_before_player_extraction(self):
+        from yt_dlp.extractor.youtube import YoutubeIE
+        extractor = service.account_extractor("1")
+        for config in [{"LOGGED_IN": False}, {"SESSION_INDEX": "1"},
+                       {"LOGGED_IN": True}, {"LOGGED_IN": True, "SESSION_INDEX": "0"}]:
+            with patch.object(YoutubeIE, "_download_initial_webpage", return_value="html"), patch.object(extractor, "extract_ytcfg", return_value=config):
+                with self.assertRaises(service.UserError):
+                    extractor._download_initial_webpage("https://www.youtube.com/watch", "web", "id")
+        with patch.object(YoutubeIE, "_download_initial_webpage", return_value="html"), patch.object(extractor, "extract_ytcfg", return_value={"LOGGED_IN": True, "SESSION_INDEX": "1"}):
+            self.assertEqual(extractor._download_initial_webpage("https://www.youtube.com/watch", "web", "id"), "html")
+
     def test_only_youtube_cookies_survive_and_expiry_is_respected(self):
         jar = [cookie(".youtube.com"), cookie("music.youtube.com", "SID"),
                cookie("mail.google.com"), cookie("youtube.com.evil.example"),
@@ -60,6 +137,7 @@ class ServiceTests(unittest.TestCase):
             def __init__(self, options):
                 seen["options"] = options
                 self.cookiejar = http.cookiejar.CookieJar()
+            def add_info_extractor(self, extractor): seen["extractor"] = extractor
             def __enter__(self): return self
             def __exit__(self, *_args): pass
             def extract_info(self, url, download):
@@ -112,7 +190,7 @@ class ServiceTests(unittest.TestCase):
         vault = Mock()
         api = Mock()
         api.get_account_info.side_effect = RuntimeError("HTTP failed")
-        with patch.object(service, "keyring", return_value=vault), patch.object(service, "music", return_value=api):
+        with patch.object(service, "keyring", return_value=vault), patch.object(service, "music", return_value=api), patch.object(service, "active_account_index", return_value="1"):
             with self.assertRaises(service.UserError):
                 service.connect([cookie(".youtube.com")], {"id": "gecko:/x", "label": "Firefox"})
         vault.save.assert_not_called()
@@ -284,7 +362,7 @@ class Browsers(unittest.TestCase):
             service.source_from_id("chromium:/etc/passwd")
         vault, api = Mock(), Mock()
         api.get_account_info.return_value = {"accountName": "Listener"}
-        with patch.object(service, "keyring", return_value=vault), patch.object(service, "music", return_value=api):
+        with patch.object(service, "keyring", return_value=vault), patch.object(service, "music", return_value=api), patch.object(service, "active_account_index", return_value="1"):
             status = service.handle({"op": "connect", "source": found[0]["id"]})
         self.assertEqual((status["account"], status["source"]), ("Listener", "Chromium · Person 1"))
         saved = vault.save.call_args[0][0]

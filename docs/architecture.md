@@ -8,6 +8,16 @@ key and exports its menus to the shell's menu bar and command palette.
 
 ## Service boundary
 
+The default `rustypipe` feature adds retained Rust clients for anonymous public
+search/collections/radio and authenticated Premium playback. Python-only builds
+remain available with `--no-default-features` or `nix build .#uta-python`.
+A separate in-memory account client imports the saved session
+through the helper and preserves its account index. It is invalidated on account
+operations or credential expiry; no RustyPipe credential cache is written to disk.
+Native failures fall back to the Python helper while preserving the requested
+playback authentication. `--ignore-credentials` blocks account reads and writes
+and uses an isolated instance and queue. See the [integration guide](premium-playback.md).
+
 `service/uta_service.py` accepts a bounded JSON request on stdin and returns
 one JSON response on stdout. Rust embeds this source into the executable.
 The Nix wrapper chooses the Python interpreter and dependencies. The helper
@@ -101,7 +111,7 @@ An actor supervises mpv and controls it over a Unix socket inside a private
 temporary directory. A new load replaces the previous mpv process, giving
 events an unambiguous playback generation. Stream URLs travel over the
 socket. Only a small allowlist of transport headers reaches mpv; session
-cookies remain in the service helper. mpv loads no user configuration and
+cookies remain in the service adapters. mpv loads no user configuration and
 does not run its own YouTube extraction.
 
 MPRIS exports track metadata and controls on `org.mpris.MediaPlayer2.uta`.

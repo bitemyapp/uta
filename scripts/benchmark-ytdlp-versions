@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""Interleave installed and unpacked yt-dlp builds; public anonymous playback only.
+
+Usage: nix develop --command python3 scripts/benchmark-ytdlp-versions WHEEL_DIR OUTPUT
+Never persists signed URLs, headers, cookies, or server response/error bodies.
+"""
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import time
+
+
+PROBE = r'''
+import importlib.metadata,json,runpy,sys,time
+from urllib.parse import parse_qs,urlsplit
+import requests
+from yt_dlp import YoutubeDL
+p=runpy.run_path('scripts/benchmark-youtube')
+started=time.perf_counter()
+options={'format':'bestaudio/best','quiet':True,'no_warnings':True,
+         'logger':p['service'].Quiet(),'skip_download':True,'noplaylist':True,
+         'socket_timeout':20,'retries':1,'extractor_retries':1,
+         'cachedir':False,'js_runtimes':{'deno':{}}}
+result={'version':importlib.metadata.version('yt-dlp')}
+try:
+    with YoutubeDL(options) as ydl:
+        info=ydl.extract_info('https://music.youtube.com/watch?v='+sys.argv[1],download=False)
+    result.update(resolve_ms=p['ms'](started),format=info.get('format_id'),
+                  protocol=info.get('protocol'),
+                  client=parse_qs(urlsplit(info['url']).query).get('c',['unknown'])[0])
+    headers={k:v for k,v in info.get('http_headers',{}).items()
+             if k.lower() in {'user-agent','referer','origin','accept'}}
+    with requests.get(info['url'],headers={**headers,'Range':'bytes=0-2097151'},
+                      timeout=20,stream=True) as response:
+        size=0
+        if response.status_code in {200,206}:
+            for chunk in response.iter_content(65536):
+                size+=len(chunk)
+                if size>=2097152: break
+        result.update(media_status=response.status_code,bytes=size,media_ok=size>=2097152)
+    result.update(p['play_probe']({'url':info['url'],'headers':headers}))
+except Exception as error:
+    result['error_type']=type(error).__name__
+print(json.dumps(result))
+'''
+
+
+def main():
+    wheel_dir, output = sys.argv[1:]
+    ids = json.loads(Path('docs/research/youtube-benchmark-2026-10-27.json').read_text())['public_video_ids'][:2]
+    report = {'utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+              'public_video_ids': ids, 'samples': []}
+    for index, video_id in enumerate(ids):
+        for version in (['installed', 'unpacked'] if index == 0 else ['unpacked', 'installed']):
+            env = dict(os.environ)
+            if version == 'unpacked':
+                env['PYTHONPATH'] = wheel_dir
+            else:
+                env.pop('PYTHONPATH', None)
+            child = subprocess.run([sys.executable, '-c', PROBE, video_id],
+                                   env=env, capture_output=True, text=True, timeout=120, check=True)
+            row = {'round': index, **json.loads(child.stdout)}
+            report['samples'].append(row)
+            Path(output).write_text(json.dumps(report, indent=2)+'\n')
+            print(json.dumps(row), flush=True)
+
+
+if __name__ == '__main__':
+    main()

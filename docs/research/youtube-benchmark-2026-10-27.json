@@ -1,0 +1,1010 @@
+{
+  "versions": {
+    "ytmusicapi": "1.12.3",
+    "yt-dlp": "2026.8.19",
+    "requests": "2.34.2"
+  },
+  "python": "3.14.7",
+  "utc": "2026-10-27T22:40:47Z",
+  "rounds": 5,
+  "samples": [
+    {
+      "case": "python-start",
+      "round": 0,
+      "ms": 10.33,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "python-start",
+      "round": 1,
+      "ms": 8.92,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "python-start",
+      "round": 2,
+      "ms": 8.98,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "python-start",
+      "round": 3,
+      "ms": 10.24,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "python-start",
+      "round": 4,
+      "ms": 11.57,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "import-ytmusicapi",
+      "round": 0,
+      "ms": 85.21,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "import-ytmusicapi",
+      "round": 1,
+      "ms": 91.34,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "import-ytmusicapi",
+      "round": 2,
+      "ms": 83.98,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "import-ytmusicapi",
+      "round": 3,
+      "ms": 90.45,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "import-ytmusicapi",
+      "round": 4,
+      "ms": 86.1,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "import-ytdlp",
+      "round": 0,
+      "ms": 203.5,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "import-ytdlp",
+      "round": 1,
+      "ms": 206.75,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "import-ytdlp",
+      "round": 2,
+      "ms": 206.49,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "import-ytdlp",
+      "round": 3,
+      "ms": 208.22,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "import-ytdlp",
+      "round": 4,
+      "ms": 206.63,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "cold-helper-search",
+      "round": 0,
+      "ms": 1898.77,
+      "ok": true,
+      "rows": 40,
+      "requests": []
+    },
+    {
+      "case": "fresh-YTMusic-search",
+      "round": 0,
+      "ms": 1765.27,
+      "ok": true,
+      "rows": 40,
+      "requests": [
+        {
+          "endpoint": "bootstrap-or-other",
+          "ms": 742.36
+        },
+        {
+          "endpoint": "innertube-search",
+          "ms": 492.82
+        },
+        {
+          "endpoint": "innertube-search",
+          "ms": 522.1
+        }
+      ]
+    },
+    {
+      "case": "retained-YTMusic-search",
+      "round": 0,
+      "ms": 1878.63,
+      "ok": true,
+      "rows": 40,
+      "requests": [
+        {
+          "endpoint": "bootstrap-or-other",
+          "ms": 667.82
+        },
+        {
+          "endpoint": "innertube-search",
+          "ms": 545.82
+        },
+        {
+          "endpoint": "innertube-search",
+          "ms": 658.11
+        }
+      ]
+    },
+    {
+      "case": "fresh-YTMusic-search",
+      "round": 1,
+      "ms": 1679.75,
+      "ok": true,
+      "rows": 40,
+      "requests": [
+        {
+          "endpoint": "bootstrap-or-other",
+          "ms": 653.27
+        },
+        {
+          "endpoint": "innertube-search",
+          "ms": 424.14
+        },
+        {
+          "endpoint": "innertube-search",
+          "ms": 595.0
+        }
+      ]
+    },
+    {
+      "case": "retained-YTMusic-search",
+      "round": 1,
+      "ms": 1268.36,
+      "ok": true,
+      "rows": 40,
+      "requests": [
+        {
+          "endpoint": "innertube-search",
+          "ms": 493.99
+        },
+        {
+          "endpoint": "innertube-search",
+          "ms": 768.17
+        }
+      ]
+    },
+    {
+      "case": "cold-helper-search",
+      "round": 1,
+      "ms": 1722.0,
+      "ok": true,
+      "rows": 40,
+      "requests": []
+    },
+    {
+      "case": "retained-YTMusic-search",
+      "round": 2,
+      "ms": 1881.97,
+      "ok": true,
+      "rows": 40,
+      "requests": [
+        {
+          "endpoint": "innertube-search",
+          "ms": 551.16
+        },
+        {
+          "endpoint": "innertube-search",
+          "ms": 1324.78
+        }
+      ]
+    },
+    {
+      "case": "cold-helper-search",
+      "round": 2,
+      "ms": 1917.83,
+      "ok": true,
+      "rows": 40,
+      "requests": []
+    },
+    {
+      "case": "fresh-YTMusic-search",
+      "round": 2,
+      "ms": 1701.63,
+      "ok": true,
+      "rows": 40,
+      "requests": [
+        {
+          "endpoint": "bootstrap-or-other",
+          "ms": 506.76
+        },
+        {
+          "endpoint": "innertube-search",
+          "ms": 605.75
+        },
+        {
+          "endpoint": "innertube-search",
+          "ms": 580.21
+        }
+      ]
+    },
+    {
+      "case": "cold-helper-search",
+      "round": 3,
+      "ms": 1833.17,
+      "ok": true,
+      "rows": 40,
+      "requests": []
+    },
+    {
+      "case": "fresh-YTMusic-search",
+      "round": 3,
+      "ms": 1684.67,
+      "ok": true,
+      "rows": 40,
+      "requests": [
+        {
+          "endpoint": "bootstrap-or-other",
+          "ms": 647.87
+        },
+        {
+          "endpoint": "innertube-search",
+          "ms": 351.54
+        },
+        {
+          "endpoint": "innertube-search",
+          "ms": 677.89
+        }
+      ]
+    },
+    {
+      "case": "retained-YTMusic-search",
+      "round": 3,
+      "ms": 1048.0,
+      "ok": true,
+      "rows": 40,
+      "requests": [
+        {
+          "endpoint": "innertube-search",
+          "ms": 497.71
+        },
+        {
+          "endpoint": "innertube-search",
+          "ms": 542.77
+        }
+      ]
+    },
+    {
+      "case": "fresh-YTMusic-search",
+      "round": 4,
+      "ms": 1960.1,
+      "ok": true,
+      "rows": 40,
+      "requests": [
+        {
+          "endpoint": "bootstrap-or-other",
+          "ms": 610.82
+        },
+        {
+          "endpoint": "innertube-search",
+          "ms": 536.15
+        },
+        {
+          "endpoint": "innertube-search",
+          "ms": 805.55
+        }
+      ]
+    },
+    {
+      "case": "retained-YTMusic-search",
+      "round": 4,
+      "ms": 1362.77,
+      "ok": true,
+      "rows": 40,
+      "requests": [
+        {
+          "endpoint": "innertube-search",
+          "ms": 501.96
+        },
+        {
+          "endpoint": "innertube-search",
+          "ms": 854.55
+        }
+      ]
+    },
+    {
+      "case": "cold-helper-search",
+      "round": 4,
+      "ms": 2126.08,
+      "ok": true,
+      "rows": 40,
+      "requests": []
+    },
+    {
+      "case": "cold-helper-resolve",
+      "round": 0,
+      "ms": 1596.01,
+      "ok": true,
+      "codec": "opus",
+      "bitrate": 152.122,
+      "format": null,
+      "requests": [],
+      "playback": "advanced",
+      "mpv_ms": 323.04
+    },
+    {
+      "case": "fresh-YoutubeDL",
+      "round": 0,
+      "ms": 1097.86,
+      "ok": true,
+      "codec": "opus",
+      "bitrate": 152.122,
+      "format": "251",
+      "requests": [
+        {
+          "endpoint": "watch-page",
+          "ms": 113.27
+        },
+        {
+          "endpoint": "innertube-player",
+          "ms": 80.26
+        },
+        {
+          "endpoint": "media",
+          "ms": 113.63
+        }
+      ],
+      "playback": "advanced",
+      "mpv_ms": 174.42
+    },
+    {
+      "case": "retained-YoutubeDL",
+      "round": 0,
+      "ms": 1052.91,
+      "ok": true,
+      "codec": "opus",
+      "bitrate": 152.122,
+      "format": "251",
+      "requests": [
+        {
+          "endpoint": "watch-page",
+          "ms": 125.78
+        },
+        {
+          "endpoint": "innertube-player",
+          "ms": 65.77
+        },
+        {
+          "endpoint": "media",
+          "ms": 80.15
+        }
+      ],
+      "playback": "advanced",
+      "mpv_ms": 122.98
+    },
+    {
+      "case": "fresh-YoutubeDL-disk-cache",
+      "round": 0,
+      "ms": 950.83,
+      "ok": true,
+      "codec": "opus",
+      "bitrate": 152.122,
+      "format": "251",
+      "requests": [
+        {
+          "endpoint": "watch-page",
+          "ms": 118.14
+        },
+        {
+          "endpoint": "innertube-player",
+          "ms": 68.8
+        },
+        {
+          "endpoint": "media",
+          "ms": 77.49
+        }
+      ],
+      "playback": "advanced",
+      "mpv_ms": 123.58
+    },
+    {
+      "case": "fresh-YoutubeDL",
+      "round": 1,
+      "ms": 1237.64,
+      "ok": true,
+      "codec": "opus",
+      "bitrate": 143.036,
+      "format": "251",
+      "requests": [
+        {
+          "endpoint": "watch-page",
+          "ms": 151.97
+        },
+        {
+          "endpoint": "innertube-player",
+          "ms": 99.74
+        },
+        {
+          "endpoint": "media",
+          "ms": 111.72
+        }
+      ],
+      "playback": "advanced",
+      "mpv_ms": 245.14
+    },
+    {
+      "case": "retained-YoutubeDL",
+      "round": 1,
+      "ms": 1063.85,
+      "ok": true,
+      "codec": "opus",
+      "bitrate": 143.036,
+      "format": "251",
+      "requests": [
+        {
+          "endpoint": "watch-page",
+          "ms": 108.58
+        },
+        {
+          "endpoint": "innertube-player",
+          "ms": 53.31
+        },
+        {
+          "endpoint": "media",
+          "ms": 38.49
+        }
+      ],
+      "playback": "advanced",
+      "mpv_ms": 178.14
+    },
+    {
+      "case": "fresh-YoutubeDL-disk-cache",
+      "round": 1,
+      "ms": 1001.74,
+      "ok": true,
+      "codec": "opus",
+      "bitrate": 143.036,
+      "format": "251",
+      "requests": [
+        {
+          "endpoint": "watch-page",
+          "ms": 115.68
+        },
+        {
+          "endpoint": "innertube-player",
+          "ms": 64.82
+        },
+        {
+          "endpoint": "media",
+          "ms": 105.72
+        }
+      ],
+      "playback": "advanced",
+      "mpv_ms": 173.75
+    },
+    {
+      "case": "cold-helper-resolve",
+      "round": 1,
+      "ms": 2366.71,
+      "ok": true,
+      "codec": "opus",
+      "bitrate": 143.036,
+      "format": null,
+      "requests": [],
+      "playback": "advanced",
+      "mpv_ms": 174.98
+    },
+    {
+      "case": "retained-YoutubeDL",
+      "round": 2,
+      "ms": 864.65,
+      "ok": true,
+      "codec": "opus",
+      "bitrate": 139.613,
+      "format": "251",
+      "requests": [
+        {
+          "endpoint": "watch-page",
+          "ms": 72.99
+        },
+        {
+          "endpoint": "innertube-player",
+          "ms": 61.21
+        },
+        {
+          "endpoint": "media",
+          "ms": 34.49
+        }
+      ],
+      "playback": "advanced",
+      "mpv_ms": 175.4
+    },
+    {
+      "case": "fresh-YoutubeDL-disk-cache",
+      "round": 2,
+      "ms": 1661.66,
+      "ok": true,
+      "codec": "opus",
+      "bitrate": 139.613,
+      "format": "251",
+      "requests": [
+        {
+          "endpoint": "watch-page",
+          "ms": 133.1
+        },
+        {
+          "endpoint": "innertube-player",
+          "ms": 107.47
+        },
+        {
+          "endpoint": "media",
+          "ms": 105.72
+        }
+      ],
+      "playback": "advanced",
+      "mpv_ms": 173.38
+    },
+    {
+      "case": "cold-helper-resolve",
+      "round": 2,
+      "ms": 1562.19,
+      "ok": true,
+      "codec": "opus",
+      "bitrate": 139.613,
+      "format": null,
+      "requests": [],
+      "playback": "advanced",
+      "mpv_ms": 175.61
+    },
+    {
+      "case": "fresh-YoutubeDL",
+      "round": 2,
+      "ms": 1011.9,
+      "ok": true,
+      "codec": "opus",
+      "bitrate": 139.613,
+      "format": "251",
+      "requests": [
+        {
+          "endpoint": "watch-page",
+          "ms": 113.33
+        },
+        {
+          "endpoint": "innertube-player",
+          "ms": 105.06
+        },
+        {
+          "endpoint": "media",
+          "ms": 75.03
+        }
+      ],
+      "playback": "advanced",
+      "mpv_ms": 174.99
+    },
+    {
+      "case": "fresh-YoutubeDL-disk-cache",
+      "round": 3,
+      "ms": 1275.04,
+      "ok": true,
+      "codec": "opus",
+      "bitrate": 144.259,
+      "format": "251",
+      "requests": [
+        {
+          "endpoint": "watch-page",
+          "ms": 134.7
+        },
+        {
+          "endpoint": "innertube-player",
+          "ms": 66.09
+        },
+        {
+          "endpoint": "media",
+          "ms": 114.83
+        }
+      ],
+      "playback": "advanced",
+      "mpv_ms": 194.81
+    },
+    {
+      "case": "cold-helper-resolve",
+      "round": 3,
+      "ms": 1578.54,
+      "ok": true,
+      "codec": "opus",
+      "bitrate": 144.259,
+      "format": null,
+      "requests": [],
+      "playback": "advanced",
+      "mpv_ms": 176.73
+    },
+    {
+      "case": "fresh-YoutubeDL",
+      "round": 3,
+      "ms": 1383.66,
+      "ok": true,
+      "codec": "opus",
+      "bitrate": 144.259,
+      "format": "251",
+      "requests": [
+        {
+          "endpoint": "watch-page",
+          "ms": 120.3
+        },
+        {
+          "endpoint": "innertube-player",
+          "ms": 65.39
+        },
+        {
+          "endpoint": "media",
+          "ms": 118.04
+        }
+      ],
+      "playback": "advanced",
+      "mpv_ms": 123.29
+    },
+    {
+      "case": "retained-YoutubeDL",
+      "round": 3,
+      "ms": 1010.33,
+      "ok": true,
+      "codec": "opus",
+      "bitrate": 144.259,
+      "format": "251",
+      "requests": [
+        {
+          "endpoint": "watch-page",
+          "ms": 82.5
+        },
+        {
+          "endpoint": "innertube-player",
+          "ms": 56.25
+        },
+        {
+          "endpoint": "media",
+          "ms": 33.18
+        }
+      ],
+      "playback": "advanced",
+      "mpv_ms": 174.51
+    },
+    {
+      "case": "cold-helper-resolve",
+      "round": 4,
+      "ms": 1604.47,
+      "ok": true,
+      "codec": "opus",
+      "bitrate": 137.29,
+      "format": null,
+      "requests": [],
+      "playback": "advanced",
+      "mpv_ms": 368.25
+    },
+    {
+      "case": "fresh-YoutubeDL",
+      "round": 4,
+      "ms": 1231.5,
+      "ok": true,
+      "codec": "opus",
+      "bitrate": 137.29,
+      "format": "251",
+      "requests": [
+        {
+          "endpoint": "watch-page",
+          "ms": 119.7
+        },
+        {
+          "endpoint": "innertube-player",
+          "ms": 59.68
+        },
+        {
+          "endpoint": "media",
+          "ms": 106.1
+        }
+      ],
+      "playback": "advanced",
+      "mpv_ms": 173.28
+    },
+    {
+      "case": "retained-YoutubeDL",
+      "round": 4,
+      "ms": 938.92,
+      "ok": true,
+      "codec": "opus",
+      "bitrate": 137.29,
+      "format": "251",
+      "requests": [
+        {
+          "endpoint": "watch-page",
+          "ms": 78.83
+        },
+        {
+          "endpoint": "innertube-player",
+          "ms": 94.44
+        },
+        {
+          "endpoint": "media",
+          "ms": 31.78
+        }
+      ],
+      "playback": "advanced",
+      "mpv_ms": 172.28
+    },
+    {
+      "case": "fresh-YoutubeDL-disk-cache",
+      "round": 4,
+      "ms": 1058.56,
+      "ok": true,
+      "codec": "opus",
+      "bitrate": 137.29,
+      "format": "251",
+      "requests": [
+        {
+          "endpoint": "watch-page",
+          "ms": 124.25
+        },
+        {
+          "endpoint": "innertube-player",
+          "ms": 71.05
+        },
+        {
+          "endpoint": "media",
+          "ms": 124.71
+        }
+      ],
+      "playback": "advanced",
+      "mpv_ms": 179.18
+    },
+    {
+      "case": "client-web_music",
+      "round": 0,
+      "ms": 2748.18,
+      "ok": true,
+      "codec": "mp4a.40.2",
+      "bitrate": null,
+      "format": "18",
+      "requests": [
+        {
+          "endpoint": "watch-page",
+          "ms": 123.32
+        },
+        {
+          "endpoint": "bootstrap-or-other",
+          "ms": 141.48
+        },
+        {
+          "endpoint": "player-js",
+          "ms": 9.17
+        },
+        {
+          "endpoint": "innertube-player",
+          "ms": 215.24
+        }
+      ],
+      "playback": "advanced",
+      "mpv_ms": 299.32
+    },
+    {
+      "case": "client-visionos",
+      "round": 0,
+      "ms": 1044.58,
+      "ok": true,
+      "codec": "opus",
+      "bitrate": 137.29,
+      "format": "251",
+      "requests": [
+        {
+          "endpoint": "watch-page",
+          "ms": 121.24
+        },
+        {
+          "endpoint": "innertube-player",
+          "ms": 59.84
+        },
+        {
+          "endpoint": "media",
+          "ms": 114.55
+        }
+      ],
+      "playback": "advanced",
+      "mpv_ms": 175.91
+    },
+    {
+      "case": "client-web",
+      "round": 0,
+      "ms": 1009.36,
+      "ok": false,
+      "error_type": "DownloadError",
+      "requests": [
+        {
+          "endpoint": "watch-page",
+          "ms": 111.26
+        }
+      ]
+    },
+    {
+      "case": "YTMusic-get-song",
+      "round": 0,
+      "ms": 207.61,
+      "ok": true,
+      "playability": "OK",
+      "audio_direct_urls": 0,
+      "ciphered_formats": 16,
+      "requests": [
+        {
+          "endpoint": "innertube-player",
+          "ms": 206.88
+        }
+      ]
+    },
+    {
+      "case": "YTMusic-get-song",
+      "round": 1,
+      "ms": 159.34,
+      "ok": true,
+      "playability": "OK",
+      "audio_direct_urls": 0,
+      "ciphered_formats": 14,
+      "requests": [
+        {
+          "endpoint": "innertube-player",
+          "ms": 158.63
+        }
+      ]
+    },
+    {
+      "case": "YTMusic-get-song",
+      "round": 2,
+      "ms": 150.71,
+      "ok": true,
+      "playability": "OK",
+      "audio_direct_urls": 0,
+      "ciphered_formats": 14,
+      "requests": [
+        {
+          "endpoint": "innertube-player",
+          "ms": 149.95
+        }
+      ]
+    }
+  ],
+  "loadavg": [
+    0.81396484375,
+    0.400390625,
+    0.36181640625
+  ],
+  "public_video_ids": [
+    "xqX3oiaxYcc",
+    "ErsVeQfjeTU",
+    "KJEzFvXx3Xw",
+    "WKU8DJzipW4",
+    "jy5x7bDYd4o"
+  ],
+  "summary": {
+    "python-start": {
+      "successes": 5,
+      "attempts": 5,
+      "median_ms": 10.24,
+      "min_ms": 8.92,
+      "max_ms": 11.57
+    },
+    "import-ytmusicapi": {
+      "successes": 5,
+      "attempts": 5,
+      "median_ms": 86.1,
+      "min_ms": 83.98,
+      "max_ms": 91.34
+    },
+    "import-ytdlp": {
+      "successes": 5,
+      "attempts": 5,
+      "median_ms": 206.63,
+      "min_ms": 203.5,
+      "max_ms": 208.22
+    },
+    "cold-helper-search": {
+      "successes": 5,
+      "attempts": 5,
+      "median_ms": 1898.77,
+      "min_ms": 1722.0,
+      "max_ms": 2126.08
+    },
+    "fresh-YTMusic-search": {
+      "successes": 5,
+      "attempts": 5,
+      "median_ms": 1701.63,
+      "min_ms": 1679.75,
+      "max_ms": 1960.1
+    },
+    "retained-YTMusic-search": {
+      "successes": 5,
+      "attempts": 5,
+      "median_ms": 1362.77,
+      "min_ms": 1048.0,
+      "max_ms": 1881.97
+    },
+    "cold-helper-resolve": {
+      "successes": 5,
+      "attempts": 5,
+      "median_ms": 1596.01,
+      "min_ms": 1562.19,
+      "max_ms": 2366.71
+    },
+    "fresh-YoutubeDL": {
+      "successes": 5,
+      "attempts": 5,
+      "median_ms": 1231.5,
+      "min_ms": 1011.9,
+      "max_ms": 1383.66
+    },
+    "retained-YoutubeDL": {
+      "successes": 5,
+      "attempts": 5,
+      "median_ms": 1010.33,
+      "min_ms": 864.65,
+      "max_ms": 1063.85
+    },
+    "fresh-YoutubeDL-disk-cache": {
+      "successes": 5,
+      "attempts": 5,
+      "median_ms": 1058.56,
+      "min_ms": 950.83,
+      "max_ms": 1661.66
+    },
+    "client-web_music": {
+      "successes": 1,
+      "attempts": 1,
+      "median_ms": 2748.18,
+      "min_ms": 2748.18,
+      "max_ms": 2748.18
+    },
+    "client-visionos": {
+      "successes": 1,
+      "attempts": 1,
+      "median_ms": 1044.58,
+      "min_ms": 1044.58,
+      "max_ms": 1044.58
+    },
+    "client-web": {
+      "successes": 0,
+      "attempts": 1,
+      "median_ms": null,
+      "min_ms": null,
+      "max_ms": null
+    },
+    "YTMusic-get-song": {
+      "successes": 3,
+      "attempts": 3,
+      "median_ms": 159.34,
+      "min_ms": 150.71,
+      "max_ms": 207.61
+    }
+  }
+}

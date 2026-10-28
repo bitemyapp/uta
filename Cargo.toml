@@ -7,6 +7,12 @@ description = "Uta 歌, a native YouTube Music client for Aizome"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/bitemyapp/uta"
 
+[features]
+# Default binaries link RustyPipe and are subject to GPL-3.0-only.
+# Use --no-default-features for a Python-only build.
+default = ["rustypipe"]
+rustypipe = ["dep:rustypipe", "dep:tokio"]
+
 [dependencies]
 aizome-kit = { path = "../aizome/crates/aizome-kit" }
 serde = { version = "1", features = ["derive"] }
@@ -18,6 +24,12 @@ ureq = "3"
 log = "0.4"
 env_logger = { version = "0.11", default-features = false, features = ["auto-color", "humantime"] }
 zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }
+rustypipe = { version = "=0.11.4", path = "vendor/rustypipe", optional = true, default-features = false, features = ["rustls-tls-webpki-roots"] }
+tokio = { version = "1", optional = true, features = ["rt-multi-thread", "time"] }
+
+[[example]]
+name = "youtube_latency"
+required-features = ["rustypipe"]
 
 [profile.dev]
 debug = "line-tables-only"

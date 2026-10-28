@@ -1,0 +1,328 @@
+{
+  "versions": {
+    "ytmusicapi": "1.12.3",
+    "yt-dlp": "2026.8.19",
+    "requests": "2.34.2"
+  },
+  "python": "3.14.7",
+  "utc": "2026-10-27T22:42:12Z",
+  "rounds": 5,
+  "samples": [
+    {
+      "case": "python-start",
+      "round": 0,
+      "ms": 9.15,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "python-start",
+      "round": 1,
+      "ms": 8.83,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "python-start",
+      "round": 2,
+      "ms": 8.93,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "python-start",
+      "round": 3,
+      "ms": 8.79,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "python-start",
+      "round": 4,
+      "ms": 9.24,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "import-ytmusicapi",
+      "round": 0,
+      "ms": 80.51,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "import-ytmusicapi",
+      "round": 1,
+      "ms": 79.93,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "import-ytmusicapi",
+      "round": 2,
+      "ms": 78.76,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "import-ytmusicapi",
+      "round": 3,
+      "ms": 78.97,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "import-ytmusicapi",
+      "round": 4,
+      "ms": 79.09,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "import-ytdlp",
+      "round": 0,
+      "ms": 189.44,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "import-ytdlp",
+      "round": 1,
+      "ms": 219.15,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "import-ytdlp",
+      "round": 2,
+      "ms": 209.09,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "import-ytdlp",
+      "round": 3,
+      "ms": 203.4,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "import-ytdlp",
+      "round": 4,
+      "ms": 185.36,
+      "ok": true,
+      "requests": []
+    },
+    {
+      "case": "visitor-bootstrap",
+      "round": 0,
+      "ms": 499.89,
+      "ok": true,
+      "requests": [
+        {
+          "endpoint": "bootstrap-or-other",
+          "ms": 498.38
+        }
+      ]
+    },
+    {
+      "case": "search-limit-1",
+      "round": 0,
+      "ms": 1129.6,
+      "ok": true,
+      "rows": 20,
+      "requests": [
+        {
+          "endpoint": "innertube-search",
+          "ms": 1126.56
+        }
+      ]
+    },
+    {
+      "case": "search-limit-40",
+      "round": 0,
+      "ms": 1276.33,
+      "ok": true,
+      "rows": 40,
+      "requests": [
+        {
+          "endpoint": "innertube-search",
+          "ms": 622.75
+        },
+        {
+          "endpoint": "innertube-search",
+          "ms": 649.23
+        }
+      ]
+    },
+    {
+      "case": "search-limit-40",
+      "round": 1,
+      "ms": 1009.57,
+      "ok": true,
+      "rows": 40,
+      "requests": [
+        {
+          "endpoint": "innertube-search",
+          "ms": 426.46
+        },
+        {
+          "endpoint": "innertube-search",
+          "ms": 578.35
+        }
+      ]
+    },
+    {
+      "case": "search-limit-1",
+      "round": 1,
+      "ms": 460.25,
+      "ok": true,
+      "rows": 20,
+      "requests": [
+        {
+          "endpoint": "innertube-search",
+          "ms": 457.98
+        }
+      ]
+    },
+    {
+      "case": "search-limit-1",
+      "round": 2,
+      "ms": 471.18,
+      "ok": true,
+      "rows": 20,
+      "requests": [
+        {
+          "endpoint": "innertube-search",
+          "ms": 469.02
+        }
+      ]
+    },
+    {
+      "case": "search-limit-40",
+      "round": 2,
+      "ms": 1162.07,
+      "ok": true,
+      "rows": 40,
+      "requests": [
+        {
+          "endpoint": "innertube-search",
+          "ms": 504.04
+        },
+        {
+          "endpoint": "innertube-search",
+          "ms": 653.16
+        }
+      ]
+    },
+    {
+      "case": "search-limit-40",
+      "round": 3,
+      "ms": 1058.65,
+      "ok": true,
+      "rows": 40,
+      "requests": [
+        {
+          "endpoint": "innertube-search",
+          "ms": 424.99
+        },
+        {
+          "endpoint": "innertube-search",
+          "ms": 628.7
+        }
+      ]
+    },
+    {
+      "case": "search-limit-1",
+      "round": 3,
+      "ms": 429.51,
+      "ok": true,
+      "rows": 20,
+      "requests": [
+        {
+          "endpoint": "innertube-search",
+          "ms": 427.06
+        }
+      ]
+    },
+    {
+      "case": "search-limit-1",
+      "round": 4,
+      "ms": 431.97,
+      "ok": true,
+      "rows": 20,
+      "requests": [
+        {
+          "endpoint": "innertube-search",
+          "ms": 429.34
+        }
+      ]
+    },
+    {
+      "case": "search-limit-40",
+      "round": 4,
+      "ms": 1304.98,
+      "ok": true,
+      "rows": 40,
+      "requests": [
+        {
+          "endpoint": "innertube-search",
+          "ms": 498.5
+        },
+        {
+          "endpoint": "innertube-search",
+          "ms": 802.01
+        }
+      ]
+    }
+  ],
+  "loadavg": [
+    0.4833984375,
+    0.388671875,
+    0.3623046875
+  ],
+  "summary": {
+    "python-start": {
+      "successes": 5,
+      "attempts": 5,
+      "median_ms": 8.93,
+      "min_ms": 8.79,
+      "max_ms": 9.24
+    },
+    "import-ytmusicapi": {
+      "successes": 5,
+      "attempts": 5,
+      "median_ms": 79.09,
+      "min_ms": 78.76,
+      "max_ms": 80.51
+    },
+    "import-ytdlp": {
+      "successes": 5,
+      "attempts": 5,
+      "median_ms": 203.4,
+      "min_ms": 185.36,
+      "max_ms": 219.15
+    },
+    "visitor-bootstrap": {
+      "successes": 1,
+      "attempts": 1,
+      "median_ms": 499.89,
+      "min_ms": 499.89,
+      "max_ms": 499.89
+    },
+    "search-limit-1": {
+      "successes": 5,
+      "attempts": 5,
+      "median_ms": 460.25,
+      "min_ms": 429.51,
+      "max_ms": 1129.6
+    },
+    "search-limit-40": {
+      "successes": 5,
+      "attempts": 5,
+      "median_ms": 1162.07,
+      "min_ms": 1009.57,
+      "max_ms": 1304.98
+    }
+  }
+}

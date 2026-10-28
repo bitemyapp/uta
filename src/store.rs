@@ -30,6 +30,18 @@ impl Store {
         Some(Self(base.join("aizome/uta/session.json")))
     }
 
+    pub fn user_profile(profile: &str) -> Option<Self> {
+        let mut store = Self::user()?;
+        match profile {
+            "default" => {}
+            "anonymous" | "python" | "python-anonymous" => {
+                store.0.set_file_name(format!("session-{profile}.json"))
+            }
+            _ => return None,
+        }
+        Some(store)
+    }
+
     pub fn load(&self) -> Saved {
         let mut saved: Saved = std::fs::read(&self.0)
             .ok()

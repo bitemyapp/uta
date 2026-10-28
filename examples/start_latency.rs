@@ -4,12 +4,9 @@
 use aizome_kit::testing::Harness;
 use aizome_uta::{
     app::{Msg, Playback, Uta},
-    service::Live,
+    service,
 };
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 fn until(h: &mut Harness<Uta>, what: &str, done: impl Fn(&Uta) -> bool) -> Duration {
     let start = Instant::now();
@@ -35,7 +32,7 @@ fn main() {
     // Media controls stay off the desktop's bus while this runs.
     // SAFETY: no other thread exists yet.
     unsafe { std::env::remove_var("DBUS_SESSION_BUS_ADDRESS") };
-    let mut h = Harness::new(Uta::new(Arc::new(Live), None, false));
+    let mut h = Harness::new(Uta::new(service::live(), None, false));
     until(&mut h, "account status", |app| !app.account_busy);
     h.send(Msg::Volume(0.0));
     h.send(Msg::Query("Bill Evans Waltz for Debby".into()));

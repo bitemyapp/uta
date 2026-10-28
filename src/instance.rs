@@ -31,14 +31,33 @@ impl Drop for Instance {
 }
 
 pub fn claim(args: &[String]) -> Result<Claim, String> {
+    claim_profile(args, "default")
+}
+
+pub fn claim_profile(args: &[String], profile: &str) -> Result<Claim, String> {
     let dir = std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
         .ok_or("XDG_RUNTIME_DIR is missing. Launch Uta inside your desktop session.")?;
-    claim_in(dir, args)
+    claim_profile_in(dir, args, profile)
 }
 
 pub fn claim_in(dir: PathBuf, args: &[String]) -> Result<Claim, String> {
-    let path = dir.join("aizome-app.uta.sock");
+    claim_profile_in(dir, args, "default")
+}
+
+pub fn claim_profile_in(dir: PathBuf, args: &[String], profile: &str) -> Result<Claim, String> {
+    if !matches!(
+        profile,
+        "default" | "anonymous" | "python" | "python-anonymous"
+    ) {
+        return Err("Invalid instance profile".into());
+    }
+    let name = if profile == "default" {
+        "aizome-app.uta".into()
+    } else {
+        format!("aizome-app.uta-{profile}")
+    };
+    let path = dir.join(format!("{name}.sock"));
     let lock = OpenOptions::new()
         .read(true)
         .write(true)
@@ -46,7 +65,7 @@ pub fn claim_in(dir: PathBuf, args: &[String]) -> Result<Claim, String> {
         .truncate(false)
         .mode(0o600)
         .custom_flags(libc::O_NOFOLLOW)
-        .open(dir.join("aizome-app.uta.lock"))
+        .open(dir.join(format!("{name}.lock")))
         .map_err(|_| "Could not open Uta's instance lock")?;
     // SAFETY: this is a live descriptor owned by `lock`; flock does not retain
     // pointers and the lock is released when the File drops.

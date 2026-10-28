@@ -1,0 +1,45 @@
+{
+  "host": "wx-workstation",
+  "date": "2026-10-27",
+  "machine": "x86_64",
+  "profile": "release",
+  "volume": 0,
+  "rounds": 3,
+  "measurement": "application harness to first positive playback position; sequential runs; no account",
+  "samples": {
+    "before": [
+      {
+        "chosen_s": 1.96,
+        "next_s": 0.41,
+        "loaded_s": 0.41
+      },
+      {
+        "chosen_s": 2.72,
+        "next_s": 0.41,
+        "loaded_s": 0.41
+      },
+      {
+        "chosen_s": 2.19,
+        "next_s": 0.41,
+        "loaded_s": 0.41
+      }
+    ],
+    "after": [
+      {
+        "chosen_s": 1.27,
+        "next_s": 0.41,
+        "loaded_s": 0.41
+      },
+      {
+        "chosen_s": 0.57,
+        "next_s": 0.41,
+        "loaded_s": 0.41
+      },
+      {
+        "chosen_s": 1.11,
+        "next_s": 0.41,
+        "loaded_s": 0.41
+      }
+    ]
+  }
+}

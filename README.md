@@ -80,9 +80,9 @@ computer:
 - **Choose folder…** opens the profile folder of a browser that Uta doesn't
   know, or one kept elsewhere.
 
-A browser signed in to several Google accounts connects the first one. A
-request copied from the developer tools connects the account it was made for.
-A separate browser profile or Firefox container also works.
+A browser signed in to several Google accounts connects the account active in
+YouTube Music. A request copied from the developer tools preserves its explicit
+account selection. A separate browser profile or Firefox container also works.
 
 A running Secret Service desktop keyring, such as GNOME Keyring, is required
 to save the session. Uta retains only YouTube cookies, stored in the desktop
@@ -130,6 +130,20 @@ can hold up to 5,000 songs.
 
 ## Develop and test
 
+The default [RustyPipe integration](docs/premium-playback.md) provides retained
+native clients for public browsing and anonymous or authenticated Premium audio.
+Run `nix run` or build with Cargo's default features. Library and
+account operations retain the Python helper, which also handles fallback.
+For a build without RustyPipe, use `nix run .#uta-python` or Cargo's
+`--no-default-features`. `uta-rustypipe` remains an alias for the default package.
+CI and flake checks build and test both the default and Python-only packages.
+
+Use `--ignore-credentials` for an isolated anonymous window and `--backend python`
+to compare the helper. The native build includes an ABBA playback benchmark;
+[measurements and limitations](docs/premium-latency-results.md) cover Premium and
+anonymous playback, cold startup, and session expiry. The native executable
+includes GPL-3.0-only code.
+
 `nix build` assembles the pinned Aizome and Sidestep sources automatically.
 For Cargo development, the repositories sit beside one another:
 
@@ -173,11 +187,16 @@ cargo test --test network -- --ignored --nocapture
 ```
 
 See [architecture](docs/architecture.md) for the service boundary and
-[performance](docs/performance.md) for the frame-budget measurement. The app
-icon is drawn by `data/genicon.py` in Aizome's icon grammar; change the
+[performance](docs/performance.md) for the frame-budget measurement.
+[YouTube integration research](docs/youtube-integration-research.md) compares
+native service options, records playback experiments, and includes a RustyPipe
+evaluation handoff. The app icon is drawn by `data/genicon.py` in Aizome's icon
+grammar; change the
 script and run `python3 data/genicon.py data` rather than editing the SVG.
 
 ## License
 
-MIT OR Apache-2.0, matching Aizome. See [LICENSE-MIT](LICENSE-MIT) and
-[LICENSE-APACHE](LICENSE-APACHE).
+Uta's own source is MIT OR Apache-2.0, matching Aizome. See
+[LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE).
+The RustyPipe dependency, enabled by default, is GPL-3.0-only; combined native builds are
+packaged under that license. See [vendor provenance and licenses](vendor/README.md).

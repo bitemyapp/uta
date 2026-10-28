@@ -1,0 +1,66 @@
+{
+  "comparison": "native vs python, same authentication",
+  "note": "Strict native calls, no fallback. Retained clients; first samples include cold initialization. Fresh mpv per sample with null audio output. start_ms measures resolve to first positive mpv position, not audible hardware output. Authentication comparisons can return different quality; group results by codec/format.",
+  "order": "ABBA",
+  "samples": [
+    {
+      "arm": "A",
+      "authenticated": false,
+      "backend": "rustypipe",
+      "bitrate_kbps": 127.802,
+      "client": "VISIONOS",
+      "codec": "opus",
+      "format_id": "251",
+      "ok": true,
+      "resolve_ms": 595.449866,
+      "round": 0,
+      "slot": 0,
+      "start_ms": 722.387044
+    },
+    {
+      "arm": "B",
+      "authenticated": false,
+      "backend": "python",
+      "bitrate_kbps": 127.802,
+      "client": "yt-dlp",
+      "codec": "opus",
+      "format_id": "251",
+      "ok": true,
+      "resolve_ms": 1504.102225,
+      "round": 0,
+      "slot": 1,
+      "start_ms": 1581.491197
+    },
+    {
+      "arm": "B",
+      "authenticated": false,
+      "backend": "python",
+      "bitrate_kbps": 127.802,
+      "client": "yt-dlp",
+      "codec": "opus",
+      "format_id": "251",
+      "ok": true,
+      "resolve_ms": 1413.698826,
+      "round": 0,
+      "slot": 2,
+      "start_ms": 1490.929218
+    },
+    {
+      "arm": "A",
+      "authenticated": false,
+      "backend": "rustypipe",
+      "bitrate_kbps": 127.802,
+      "client": "VISIONOS",
+      "codec": "opus",
+      "format_id": "251",
+      "ok": true,
+      "resolve_ms": 87.635535,
+      "round": 0,
+      "slot": 3,
+      "start_ms": 163.284416
+    }
+  ],
+  "schema": 1,
+  "utc_unix": 1793208453,
+  "video_id": "Az4SnX521pI"
+}

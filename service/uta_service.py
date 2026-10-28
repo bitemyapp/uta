@@ -629,14 +629,32 @@ def music(saved=None):
     return YTMusic()
 
 
+def active_account_index(jar):
+    """Follow the account selected in Music, not Google's first signed-in account."""
+    request = urllib.request.Request("https://music.youtube.com/", headers={
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0",
+        "Accept-Language": "en-US,en;q=0.9"})
+    jar.add_cookie_header(request)
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            page = response.read(8 * 1024 * 1024).decode("utf-8", errors="replace")
+    except Exception:
+        raise UserError("Could not identify the active YouTube Music account. Open Music in that browser and try again.") from None
+    index = re.search(r'"SESSION_INDEX"\s*:\s*"?([0-9]{1,3})"?\s*[,}]', page)
+    if not index or not re.search(r'"LOGGED_IN"\s*:\s*true', page):
+        raise UserError("YouTube Music did not identify a signed-in account. Open Music in that browser and try again.")
+    return index.group(1)
+
+
 def connect(cookies, source, authuser=None):
     """Check the cookies with YouTube, then replace the saved session."""
     vault = keyring(create=True)
-    session = {"cookies": encode_cookies(cookies), "authuser": authuser or "0", "source": source}
+    session = {"cookies": encode_cookies(cookies), "source": source}
     if not any(c["name"] == SESSION for c in session["cookies"]):
         if source.get("id"):
             raise UserError(f"{source['label']} isn't signed in to YouTube. Sign in at music.youtube.com there, then connect again.")
         raise UserError("That has no YouTube sign-in. Copy a request to music.youtube.com from your browser's developer tools, or export its cookies.txt, then try again.")
+    session["authuser"] = authuser if authuser is not None else active_account_index(decode_cookies(session["cookies"]))
     try:
         session["account"] = music(session).get_account_info().get("accountName") or "YouTube account"
     except Exception:
@@ -725,6 +743,48 @@ def collections(items, kind):
     return [row for item in items or [] if (row := collection(item, kind))["id"]]
 
 
+def account_extractor(authuser):
+    """Keep yt-dlp's bootstrap and player requests on the saved Google account."""
+    from yt_dlp.extractor.youtube import YoutubeIE
+    if not re.fullmatch(r"[0-9]{1,3}", authuser):
+        raise UserError("Reconnect your account to refresh its account selection.")
+
+    class SelectedAccount(YoutubeIE):
+        @classmethod
+        def ie_key(cls):
+            return "Youtube"
+
+        def _download_webpage(self, url, *args, **kwargs):
+            if isinstance(url, str) and youtube_host(urlsplit(url).hostname or ""):
+                kwargs["query"] = {**(kwargs.get("query") or {}), "authuser": authuser}
+            return super()._download_webpage(url, *args, **kwargs)
+
+        def _download_initial_webpage(self, webpage_url, webpage_client, video_id):
+            page = super()._download_initial_webpage(webpage_url, webpage_client, video_id)
+            config = self.extract_ytcfg(video_id, page)
+            # Cookie presence alone is insufficient: Google may have revoked it.
+            if config.get("LOGGED_IN") is not True or "SESSION_INDEX" not in config:
+                raise UserError("YouTube has signed this session out. Reconnect your account from the Account page.")
+            self._extract_session_index(config)
+            return page
+
+        def _get_requested_clients(self, url, smuggled_data, is_premium_subscriber):
+            # Premium can use the fast Music client without a media PO token.
+            # Other signed-in accounts need yt-dlp's broader authenticated policy.
+            if is_premium_subscriber:
+                return ["web_music"]
+            return super()._get_requested_clients(url, smuggled_data, is_premium_subscriber)
+
+        @staticmethod
+        def _extract_session_index(*data):
+            actual = YoutubeIE._extract_session_index(*data)
+            if actual is not None and actual != int(authuser):
+                raise UserError("YouTube selected a different account. Reconnect your account.")
+            return int(authuser)
+
+    return SelectedAccount()
+
+
 def resolve(video_id, saved):
     if not VIDEO_ID.fullmatch(video_id):
         raise UserError("This song has an invalid YouTube ID.")
@@ -733,13 +793,15 @@ def resolve(video_id, saved):
     if jar is not None:
         auth_headers(jar)  # Reject an expired session before any anonymous fallback.
     options = {
-        "format": "bestaudio/best", "quiet": True, "no_warnings": True,
+        "format": "bestaudio/best",
+        "quiet": True, "no_warnings": True,
         "logger": Quiet(), "skip_download": True, "noplaylist": True,
         "socket_timeout": 20, "retries": 1, "extractor_retries": 1,
         "cachedir": False, "js_runtimes": {"deno": {}},
     }
     with YoutubeDL(options) as downloader:
         if saved:
+            downloader.add_info_extractor(account_extractor(str(saved.get("authuser", "0"))))
             # The same session used for the library MUST reach the player API.
             for cookie in jar:
                 downloader.cookiejar.set_cookie(cookie)
@@ -753,7 +815,8 @@ def resolve(video_id, saved):
                if k.lower() in allowed and isinstance(v, str) and "\n" not in v and "\r" not in v}
     return {"stream": {"url": stream_url, "headers": headers,
                        "codec": info.get("acodec") or "audio", "bitrate": info.get("abr") or 0,
-                       "authenticated": bool(saved)}}
+                       "authenticated": bool(saved), "format_id": str(info.get("format_id", "")),
+                       "client": "yt-dlp"}}
 
 
 def handle(request):
@@ -788,6 +851,16 @@ def handle(request):
     saved = saved_session(required=True) if request.get("authenticated") else None
     if op in {"liked", "playlists", "albums", "history", "rate"} and not saved:
         raise UserError("Connect your YouTube account to use your library.")
+    if op == "native_session":
+        if not saved:
+            raise UserError("Connect your account before authenticated playback.")
+        jar = decode_cookies(saved["cookies"])
+        authuser = str(saved.get("authuser", "0"))
+        if not re.fullmatch(r"[0-9]{1,3}", authuser):
+            raise UserError("Reconnect your account to refresh its account selection.")
+        headers = auth_headers(jar, authuser)
+        expiry = min([int(time.time()) + 1800] + [c.expires for c in jar if c.expires])
+        return {"credentials": {"cookie": headers["cookie"], "authuser": authuser, "expires": expiry}}
     if op == "resolve":
         return resolve(request.get("id", ""), saved)
     api = music(saved)

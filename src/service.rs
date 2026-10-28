@@ -8,7 +8,7 @@ use std::{
 };
 
 /// Text that may hold a session's cookies: sent to the helper, never printed.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(transparent)]
 pub struct Secret(pub String);
 
@@ -22,6 +22,8 @@ impl std::fmt::Debug for Secret {
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Request {
     Status,
+    /// Internal, pipe-only handoff from the keyring helper to the native client.
+    NativeSession,
     /// Look through the browsers' profiles for YouTube sign-ins.
     Discover,
     /// Connect with a profile from `Discover`, or `folder:<path>`.
@@ -53,6 +55,10 @@ pub enum Request {
     Resolve {
         id: String,
     },
+    /// Retry a native stream rejected by the audio transport, once via yt-dlp.
+    ResolveFallback {
+        id: String,
+    },
     Rate {
         id: String,
         like: bool,
@@ -62,6 +68,8 @@ pub enum Request {
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct Reply {
+    /// Which adapter answered, for diagnostics and latency measurements.
+    pub backend: String,
     pub connected: bool,
     pub account: String,
     pub message: String,
@@ -75,6 +83,41 @@ pub struct Reply {
     pub tracks: Vec<Track>,
     pub collections: Vec<Collection>,
     pub stream: Option<Stream>,
+    pub credentials: Option<NativeCredentials>,
+}
+
+/// Deliberately redacted when a Reply is logged. Never persisted by RustyPipe.
+#[derive(Clone, Debug, Deserialize)]
+pub struct NativeCredentials {
+    pub cookie: Secret,
+    pub authuser: String,
+    pub expires: u64,
+}
+
+/// This boundary prevents *all* account I/O in the comparison profile,
+/// including account discovery, connecting and disconnecting.
+pub struct IgnoreCredentials(pub Arc<dyn Service>);
+impl Service for IgnoreCredentials {
+    fn call(&self, request: Request, _authenticated: bool) -> Result<Reply, String> {
+        match request {
+            Request::Status | Request::Discover => Ok(Reply {
+                message: "Saved credentials are ignored in this window.".into(),
+                ..Reply::default()
+            }),
+            Request::Connect { .. }
+            | Request::ConnectText { .. }
+            | Request::Disconnect
+            | Request::NativeSession
+            | Request::Liked
+            | Request::Playlists
+            | Request::Albums
+            | Request::History
+            | Request::Rate { .. } => {
+                Err("Account actions are disabled by --ignore-credentials.".into())
+            }
+            request => self.0.call(request, false),
+        }
+    }
 }
 
 pub trait Service: Send + Sync {
@@ -94,6 +137,10 @@ pub struct Live;
 
 impl Service for Live {
     fn call(&self, request: Request, authenticated: bool) -> Result<Reply, String> {
+        let request = match request {
+            Request::ResolveFallback { id } => Request::Resolve { id },
+            request => request,
+        };
         let python = std::env::var_os("UTA_PYTHON").unwrap_or_else(|| "python3".into());
         let mut command = Command::new(python);
         crate::process::kill_with_parent(&mut command);
@@ -165,7 +212,10 @@ impl Service for Live {
         if let Some(error) = response.error {
             Err(error)
         } else {
-            Ok(response.data)
+            Ok(Reply {
+                backend: "python".into(),
+                ..response.data
+            })
         }
     }
 }
@@ -204,7 +254,7 @@ impl Service for Demo {
                 }],
                 ..Reply::default()
             }),
-            Request::Resolve { .. } => {
+            Request::Resolve { .. } | Request::ResolveFallback { .. } => {
                 Err("Demo mode shows the interface without playing audio.".into())
             }
             _ => Err("Account actions are unavailable in demo mode.".into()),
@@ -279,5 +329,28 @@ pub fn demo_tracks() -> Vec<Track> {
 }
 
 pub fn live() -> Arc<dyn Service> {
+    configured(
+        std::env::var("UTA_SERVICE").as_deref() == Ok("python"),
+        false,
+    )
+}
+
+pub fn configured(python: bool, ignore_credentials: bool) -> Arc<dyn Service> {
+    let service = backend(python);
+    if ignore_credentials {
+        Arc::new(IgnoreCredentials(service))
+    } else {
+        service
+    }
+}
+
+fn backend(_python: bool) -> Arc<dyn Service> {
+    #[cfg(feature = "rustypipe")]
+    if !_python {
+        match crate::native_service::Native::new() {
+            Ok(native) => return Arc::new(native),
+            Err(_) => log::warn!("Native music service unavailable; using Python"),
+        }
+    }
     Arc::new(Live)
 }
