@@ -173,8 +173,11 @@ cargo test --test network -- --ignored --nocapture
 ```
 
 See [architecture](docs/architecture.md) for the service boundary and
-[performance](docs/performance.md) for the frame-budget measurement. The app
-icon is drawn by `data/genicon.py` in Aizome's icon grammar; change the
+[performance](docs/performance.md) for the frame-budget measurement.
+[YouTube integration research](docs/youtube-integration-research.md) compares
+native service options, records playback experiments, and includes a RustyPipe
+evaluation handoff. The app icon is drawn by `data/genicon.py` in Aizome's icon
+grammar; change the
 script and run `python3 data/genicon.py data` rather than editing the SVG.
 
 ## License

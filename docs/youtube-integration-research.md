@@ -6,11 +6,25 @@ Premium accounts, or account mutations were used. Production code is unchanged.
 
 ## Recommendation
 
-**Uta can be substantially faster without changing its native UI or asking users
-for developer credentials.** Start by retaining service clients and returning the
-first page immediately. Then develop a narrowly scoped, authenticated playback
-resolver with yt-dlp as a fallback. Keep authentication and playback as separate
-design decisions: replacing Python does not by itself simplify signing in.
+**Prioritize native operation with no browser running alongside Uta.** The user
+clarified that reducing browser use and resource overhead is the primary goal;
+privacy is a secondary consideration. Do not make a Google partnership or
+customer-created API credentials prerequisites. Browser-backed playback is
+outside the recommended direction, although it remains documented below for
+completeness.
+
+The user will pursue **RustyPipe on another computer**. The next evaluation should
+therefore establish whether it can replace Uta's metadata and playback-resolution
+paths with acceptable feature coverage and total resource use. See the
+[RustyPipe handoff](#rustypipe-handoff) for concrete checks. No RustyPipe integration
+or benchmark has been performed on this research branch.
+
+The preferred architecture is a Rust service layer, a small restricted JavaScript
+engine where required, and native audio playback, with yt-dlp available as a
+fallback. A narrow custom implementation and an existing Rust library are two
+ways to reach that architecture. Retaining the current Python clients and
+returning first pages immediately remains a useful lower-risk improvement or
+transition path; it does not need to precede the separate RustyPipe experiment.
 
 The strongest measured opportunity is avoiding unnecessary requests. The current
 helper resolved a song in a median 1.60 s; a retained yt-dlp instance took 1.01 s.
@@ -18,12 +32,11 @@ A different resolver, with its unrelated metadata request experimentally omitted
 took 0.13–0.27 s and produced playable audio. This demonstrates feasibility, not a
 validated Premium implementation or a production latency guarantee.
 
-For account connection, an explicit browser extension/native-messaging bridge is
-worth prototyping. It can provide current session/account information without
-maintaining every browser's cookie database and encryption format. Keeping an
-actual YouTube Music page as the playback engine is a separate alternative: it
-delegates considerably more protocol work to the site, with browser resource use
-and page-integration maintenance as the cost.
+Uta already operates without a running browser after importing a session. Retain
+that property and the existing connection flow initially. An occasional browser
+visit for sign-in/reconnection is the working authentication approach; continuous
+browser activity must not be a playback dependency. Defer extension and embedded
+login work until observed connection failures justify it.
 
 I found no public, documented Google API that supplies the combination of YouTube
 Music library/radio, Premium audio streams, and native background playback that
@@ -39,6 +52,41 @@ availability of such a partnership has not been established.
 both. The recommendation works as an investigation plan for either audience,
 but the fastest anonymous playback experiments do **not** prove Premium account
 fidelity. Free-account and Premium-account behavior need separate acceptance tests.
+
+## Options for lower resource use
+
+| Option | Role | Resource implications | Remaining work |
+| --- | --- | --- | --- |
+| Retained ytmusicapi / yt-dlp clients | Immediate improvement or transition | Avoids repeated imports/bootstrap; resident Python trades idle memory for response latency. An idle timeout is possible. | Measure total memory and idle CPU; keep library requests from blocking playback. |
+| Rust HTTP + small JS solver + native player | Preferred architectural destination | No browser renderer, DOM or layout engine; instantiate solver work only when needed and cache reusable artifacts. Actual footprint remains unmeasured. | Maintain the required internal endpoints, response parsers, account selection and playback compatibility. |
+| RustyPipe | User's next experiment; broad existing Rust candidate | Reuses native API/extraction code, but some paths require a separate BotGuard helper with a simulated browser environment. | Check licensing fit, complete dependency/process footprint, feature coverage and authenticated playback. |
+| ytmapi-rs plus a dedicated resolver | Permissively licensed component option | Moves Music metadata into Rust; requires a separate playback implementation. | Fill Uta feature gaps and compare maintenance cost with a narrower custom adapter. |
+| YouTube.js / DisTube service | Secondary browser-free candidates | A JS service runtime can run without a browser. Token generation can add substantial memory use; the DisTube mweb sample reached about 593 MiB RSS. | Prove authenticated media delivery and measure the complete runtime rather than the simplest anonymous path. |
+| Genuine website page / Electron / persistent WebView | Documented alternative, outside the preferred direction | Retains browser machinery during use. | Does not address the stated resource and browser-dependence objective. |
+
+For the custom native path, the proposed components are Rust requests for
+search/library/radio/player data, reusable HTTP connections, cached session and
+player state, a restricted QuickJS worker for required transformations, and mpv
+initially. A retained mpv instance or libmpv can be evaluated separately. Launch
+yt-dlp only when the native resolver cannot handle an item; do not require Python,
+Node and a browser to remain resident together.
+
+[yt-dlp EJS supports QuickJS and QuickJS-ng](https://github.com/yt-dlp/ejs), so a
+small JS engine is a practical building block. QuickJS supplies JavaScript
+execution without a browser UI engine. This does not establish that every
+BotGuard/token requirement can be satisfied by the same small helper; measure
+those paths independently. The
+[ytm-rs solver implementation](https://github.com/grapedjuice/ytm-rs/blob/main/src/jsc.rs)
+is an architectural reference for cached QuickJS solving, subject to the licensing
+distinction described below.
+
+The experiments so far establish latency opportunities and a few process RSS
+snapshots. They do **not** establish end-to-end memory savings against a browser
+tab or a complete native implementation. Compare total process-tree proportional
+set size (PSS), peak memory, idle CPU/wakeups, cold start, first-result latency and
+time to playable audio. Include cold and warm solver/token paths, fallback usage,
+and resource release after stopping playback. Faster request completion and lower
+steady memory are separate measurements.
 
 ## What Uta currently does
 
@@ -330,7 +378,11 @@ integrations, not a generally available YouTube playback API for Uta.
 
 ## Suggested implementation sequence
 
-1. **Keep the current libraries; fix request lifetime and pagination.** Maintain
+1. **Evaluate RustyPipe on the user's other computer.** Follow the handoff below.
+   Establish which Uta operations it can replace, whether the actual account is
+   used for playback, and what processes/resources the complete path requires.
+   Keep this as a focused prototype before changing the application backend.
+2. **Keep the current backend available; improve it where useful.** Maintain
    session-scoped clients in supervised workers. Give interactive playback a
    separate lane from large library requests; do not put every request behind one
    blocking queue. Bound concurrency and avoid sharing mutable client objects
@@ -339,21 +391,21 @@ integrations, not a generally available YouTube playback API for Uta.
    normalized metadata with sensible expiry. Keep credentials in Secret Service,
    not general client caches. These changes preserve the existing service schema
    where practical and should be measured before a rewrite.
-2. **Add a resolver boundary and a narrow fast implementation.** Request player
-   data without related-video/browse work. Prototype authenticated WEB_REMIX with
-   cached solving, and compare it with an upstream minimal DisTube API and a
-   retained yt-dlp fallback. Choose explicit behavior for signed-in accounts;
+3. **Choose the native service and resolver boundary from the evidence.** Compare
+   RustyPipe with a narrow Rust implementation, using ytmapi-rs where it covers
+   the needed Music operations. Request player data without related-video/browse
+   work. For a custom resolver, prototype authenticated WEB_REMIX with cached
+   QuickJS solving and an on-demand yt-dlp fallback. An upstream minimal DisTube
+   API remains an alternative if its runtime cost is acceptable. Choose explicit
+   behavior for signed-in accounts;
    never silently substitute an anonymous stream while claiming Premium use.
    Validate media before promoting a path; on expiry/403 invalidate and retry
    through the appropriate fallback with a bounded deadline.
-3. **Prototype browser connection separately.** Prefer an explicit extension
-   bridge if browser support can be distributed cleanly with Aizome/Sekka.
-   Compare its installation cost with the existing one-click import experience.
-   Account selection, cookie rotation, logout and expired sessions matter more
-   than cosmetic sign-in wording. Keep current import as a transition path.
-4. **Evaluate genuine-page playback as a distinct product option.** Test a local
-   bridge while preserving the Aizome UI. Measure memory, first launch, suspend,
-   recovery and account fidelity alongside resolver maintenance burden.
+4. **Preserve browser-independent operation and the current connection flow.**
+   Test account selection, cookie rotation, logout and expired sessions. Revisit
+   a connection-only extension or temporary login window only if it materially
+   improves these cases. Do not add browser-backed playback to the implementation
+   plan under the current product priorities.
 5. **Optimize the audio process after the access path.** A retained mpv or libmpv
    instance could remove process/IPC setup and improve transitions, but retain
    explicit track-generation ownership. Existing successful prefetching already
@@ -371,6 +423,52 @@ but one codec/bitrate or a supplied cookie jar is not proof of correct entitleme
 The key next experiment is an authenticated comparison on a consenting Premium
 test account. That work remains unperformed. Anonymous benchmark success should
 not be used to claim this product requirement is already solved.
+
+## RustyPipe handoff
+
+The research branch contains the report, four standalone benchmark scripts and
+seven sanitized JSON records. It changes no application dependencies or production
+code. The user plans to perform the RustyPipe experiment elsewhere; the following
+is a suggested evaluation, not completed work.
+
+Start a separate prototype branch from this research branch on the other computer:
+
+```sh
+git fetch origin
+git switch -c research/rustypipe-native origin/research/youtube-integration-options
+```
+
+The version inspected during research was 0.11.4. Pin the version selected for the
+experiment and record it with the Rust toolchain and any helper versions. Start
+with the [RustyPipe API documentation](https://docs.rs/rustypipe/latest/rustypipe/)
+and [repository](https://github.com/TeamPiped/rustypipe), including its linked
+upstream project and BotGuard documentation.
+
+| Evaluation | Concrete check |
+| --- | --- |
+| Feature parity | Map Uta's `handle()` operations to RustyPipe: top/filtered search, liked songs, library albums/playlists, album/playlist tracks, history, radio/watch queue, like/unlike, account identity and audio resolution. Record gaps rather than silently dropping behavior. |
+| Pagination | Return the first page promptly and follow explicit continuations for long lists; compare against the retained ytmusicapi first-page baseline. |
+| Authentication | Use the existing cookie/session model initially. Verify the selected Google account and brand channel for both metadata and playback; cookies alone do not prove account fidelity. |
+| Authentication API | RustyPipe documents TV-only OAuth with limited capabilities; use its cookie-authenticated desktop/Music path for account-library evaluation. Check which queries need explicit `.authenticated()` rather than relying on automatic fallback. |
+| Premium playback | Identify the selected client and audio format; require substantial media delivery, full-track playback and seeking. Detect anonymous fallback explicitly and verify behavior with the browser closed. |
+| Token/helper cost | Determine when `rustypipe-botguard` is invoked, whether any external runtime/browser process is required, and its cold/warm memory and CPU costs. Do not infer total footprint from the Rust library alone. |
+| Cache integration | Adapt credential persistence to Uta's Secret Service storage and disable default raw-response reports for ordinary use. Keep reusable non-secret player/cache artifacts distinct from account state. |
+| Recovery | Test expired cookies/URLs, account switching, HTTP 403, network changes and worker failures. Preserve Uta's generation checks and prevent obsolete work from changing current playback. |
+| Distribution | Review GPL-3.0 requirements against Uta's existing MIT OR Apache-2.0 distribution and document the chosen approach before integration. |
+| Performance | Compare equivalent operations and audio quality. Record process-tree PSS/peak memory, idle CPU, first-page latency, resolve time and actual playback start, with all helpers included. |
+
+Begin with public content and the IDs in the baseline JSON, then use an explicitly
+authorized test account for private-library and Premium checks. Keep credentials,
+signed media URLs and raw authenticated responses out of committed fixtures and
+logs. The existing benchmark's mpv probe can check initial silent playback;
+full-track and seek validation must be added to the evaluation separately.
+
+An affirmative result should demonstrate native operation with the browser closed,
+acceptable account/feature coverage, a lower measured resource budget, and a
+maintainable fallback for unsupported playback. A negative result is still useful
+if it identifies the specific feature, authentication or helper cost that favors
+the narrower Rust-plus-QuickJS alternative. No fixed memory or latency acceptance
+threshold has been agreed yet.
 
 ## Artifacts and reproduction
 
