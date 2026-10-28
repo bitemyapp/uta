@@ -27,6 +27,7 @@ in rustPlatform.buildRustPackage {
   postInstall = ''
     ${lib.optionalString enableRustyPipe ''
       install -Dm644 vendor/rustypipe/LICENSE $out/share/doc/aizome-uta/LICENSE-RustyPipe
+      install -Dm644 vendor/rustypipe/ejs/LICENSE $out/share/doc/aizome-uta/LICENSE-EJS
     ''}
     install -Dm644 data/org.aizome.Uta.desktop $out/share/applications/org.aizome.Uta.desktop
     install -Dm644 data/org.aizome.Uta.svg $out/share/icons/hicolor/scalable/apps/org.aizome.Uta.svg

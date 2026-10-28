@@ -27,6 +27,33 @@ def session():
 
 
 class ServiceTests(unittest.TestCase):
+    def test_native_session_requires_auth_and_preserves_selection_and_expiry(self):
+        saved = session()
+        saved["authuser"] = "2"
+        with patch.object(service, "saved_session", return_value=saved):
+            result = service.handle({"op": "native_session", "authenticated": True})
+            self.assertEqual(result["credentials"]["authuser"], "2")
+            self.assertIn("__Secure-3PAPISID=", result["credentials"]["cookie"])
+            self.assertLessEqual(result["credentials"]["expires"], time.time() + 1800)
+        with patch.object(service, "keyring", side_effect=AssertionError("no keyring")):
+            with self.assertRaises(service.UserError):
+                service.handle({"op": "native_session", "authenticated": False})
+        saved["authuser"] = "0\r\nCookie: bad"
+        with patch.object(service, "saved_session", return_value=saved):
+            with self.assertRaises(service.UserError):
+                service.handle({"op": "native_session", "authenticated": True})
+
+    def test_fallback_preserves_selected_account_and_refuses_a_mismatch(self):
+        from yt_dlp.extractor.youtube import YoutubeIE
+        extractor = service.account_extractor("2")
+        self.assertEqual(extractor.ie_key(), "Youtube")
+        self.assertEqual(extractor._extract_session_index({"SESSION_INDEX": "2"}), 2)
+        with self.assertRaises(service.UserError):
+            extractor._extract_session_index({"SESSION_INDEX": "0"})
+        with patch.object(YoutubeIE, "_download_webpage", return_value="html") as fetch:
+            extractor._download_webpage("https://music.youtube.com/", "id", query={"keep": "yes"})
+            self.assertEqual(fetch.call_args.kwargs["query"], {"keep": "yes", "authuser": "2"})
+
     def test_only_youtube_cookies_survive_and_expiry_is_respected(self):
         jar = [cookie(".youtube.com"), cookie("music.youtube.com", "SID"),
                cookie("mail.google.com"), cookie("youtube.com.evil.example"),
@@ -60,6 +87,7 @@ class ServiceTests(unittest.TestCase):
             def __init__(self, options):
                 seen["options"] = options
                 self.cookiejar = http.cookiejar.CookieJar()
+            def add_info_extractor(self, extractor): seen["extractor"] = extractor
             def __enter__(self): return self
             def __exit__(self, *_args): pass
             def extract_info(self, url, download):

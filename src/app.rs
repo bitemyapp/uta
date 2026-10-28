@@ -975,7 +975,6 @@ impl Program for Uta {
                 }
                 EventKind::Failed(error) => {
                     if self.native_stream
-                        && !self.connected
                         && self.position == 0.0
                         && let Some(id) = self.queue.track().map(|track| track.id.clone())
                     {

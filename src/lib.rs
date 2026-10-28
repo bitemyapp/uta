@@ -9,3 +9,7 @@ mod process;
 pub mod service;
 pub mod store;
 pub mod ui;
+
+#[cfg(feature = "rustypipe")]
+pub mod benchmark;
+pub mod options;

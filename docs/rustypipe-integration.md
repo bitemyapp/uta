@@ -1,5 +1,8 @@
 # RustyPipe integration trial
 
+This report describes the original anonymous trial. See
+[persistent authenticated playback](premium-playback.md) for the current branch.
+
 Implemented on `research/youtube-integration-options`, 27 October 2026. Builds,
 automated tests, playback checks and measurements ran over SSH on
 `wx-workstation`. The local checkout contains the implementation and evidence.

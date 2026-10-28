@@ -1641,6 +1641,31 @@ impl RustyPipe {
         Ok(())
     }
 
+    /// Import an already validated session while preserving its selected account.
+    /// The selected account is checked against YouTube before storing in memory.
+    pub async fn user_auth_set_cookie_for_account(
+        &self,
+        cookie: String,
+        index: String,
+    ) -> Result<(), Error> {
+        if cookie.is_empty()
+            || index.is_empty()
+            || index.len() > 3
+            || !index.bytes().all(|b| b.is_ascii_digit())
+        {
+            return Err(Error::Auth(AuthError::NoLogin));
+        }
+        let mut auth = AuthCookie::new(cookie);
+        auth.session_index = Some(index.clone());
+        self.extract_session_headers(&mut auth).await?;
+        if auth.session_index.as_ref() != Some(&index) {
+            return Err(Error::Auth(AuthError::NoLogin));
+        }
+        *self.inner.cache.auth_cookie.write().unwrap() = Some(auth);
+        self.store_cache().await;
+        Ok(())
+    }
+
     /// Parse the user authentication cookie from a Netscape HTTP Cookie File
     ///
     /// The cookie is used for authenticated requests with browser-based clients
@@ -1694,6 +1719,10 @@ impl RustyPipe {
             .inner
             .http
             .get("https://www.youtube.com/results?search_query=")
+            .query(&[(
+                "authuser",
+                auth_cookie.session_index.as_deref().unwrap_or("0"),
+            )])
             .header(header::COOKIE, &auth_cookie.cookie)
             .build()?;
         let html = self.http_request_txt(&req).await?;
@@ -2204,7 +2233,12 @@ impl RustyPipeQuery {
     fn sapisidhash_header(cookie: &str, ctype: ClientType) -> Option<String> {
         let sapisid = cookie
             .split(';')
-            .find_map(|c| c.trim().strip_prefix("SAPISID="))?;
+            .find_map(|c| c.trim().strip_prefix("SAPISID="))
+            .or_else(|| {
+                cookie
+                    .split(';')
+                    .find_map(|c| c.trim().strip_prefix("__Secure-3PAPISID="))
+            })?;
         let time_now = OffsetDateTime::now_utc().unix_timestamp();
         let mut sapisidhash = Sha1::new();
         sapisidhash.update(time_now.to_string());

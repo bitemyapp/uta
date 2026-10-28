@@ -147,3 +147,40 @@ fn native_public_metadata_coverage() {
         .unwrap();
     assert!(!playlist.tracks.is_empty());
 }
+
+#[cfg(feature = "rustypipe")]
+#[test]
+#[ignore = "public WEB_REMIX compatibility probe; no account or keyring access"]
+fn native_web_music_player_parses_current_player_and_formats() {
+    use rustypipe::client::{ClientType, RustyPipe};
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        let pipe = RustyPipe::builder()
+            .no_storage()
+            .no_reporter()
+            .no_botguard()
+            .unauthenticated()
+            .n_http_retries(0)
+            .timeout(Duration::from_secs(10))
+            .build()
+            .unwrap();
+        let player = pipe
+            .query()
+            .unauthenticated()
+            .player_from_client("Az4SnX521pI", ClientType::DesktopMusic)
+            .await;
+        assert!(player.is_ok(), "public WEB_REMIX extraction failed");
+        let player = player.unwrap();
+        assert!(!player.audio_streams.is_empty());
+        assert!(
+            player
+                .audio_streams
+                .iter()
+                .all(|s| s.url.starts_with("https://"))
+        );
+    });
+}

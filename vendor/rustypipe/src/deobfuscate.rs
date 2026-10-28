@@ -14,7 +14,7 @@ use crate::{
 };
 
 pub struct Deobfuscator {
-    ctx: Context,
+    data: std::sync::Arc<DeobfData>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -61,8 +61,10 @@ impl DeobfData {
     }
 
     pub fn extract_fns(js_url: &str, player_js: &str) -> Result<Self, Error> {
-        let sig_fn = get_sig_fn(player_js)?;
-        let nsig_fn = get_nsig_fn(player_js)?;
+        let (sig_fn, nsig_fn) = match (get_sig_fn(player_js), get_nsig_fn(player_js)) {
+            (Ok(sig), Ok(nsig)) => (sig, nsig),
+            _ => (extract_ejs(player_js)?, String::new()),
+        };
         let sts = get_sts(player_js)?;
 
         Ok(Self {
@@ -74,37 +76,160 @@ impl DeobfData {
     }
 }
 
+// EJS preprocesses the current player once; RustyPipe retains this code in its
+// in-memory player cache. Only the extracted functions run during resolution.
+fn limited_runtime(seconds: u64) -> Result<Runtime, DeobfError> {
+    let rt = Runtime::new()?;
+    rt.set_memory_limit(256 * 1024 * 1024);
+    rt.set_gc_threshold(64 * 1024 * 1024);
+    rt.set_max_stack_size(8 * 1024 * 1024);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(seconds);
+    rt.set_interrupt_handler(Some(Box::new(move || std::time::Instant::now() > deadline)));
+    Ok(rt)
+}
+
+fn extract_ejs(player_js: &str) -> Result<String, DeobfError> {
+    let source = player_js.to_owned();
+    std::thread::Builder::new()
+        .name("uta-player-prepare".into())
+        .stack_size(16 * 1024 * 1024)
+        .spawn(move || extract_ejs_inner(&source))
+        .map_err(|_| DeobfError::Other("Could not start player preparation".into()))?
+        .join()
+        .map_err(|_| DeobfError::Other("Player preparation stopped".into()))?
+}
+
+fn extract_ejs_inner(player_js: &str) -> Result<String, DeobfError> {
+    let rt = limited_runtime(30)?;
+    let ctx = Context::full(&rt)?;
+    let input = serde_json::json!({"type":"player", "player":player_js,
+        "output_preprocessed":true, "requests":[]});
+    let script = format!(
+        "{}\nObject.assign(globalThis, lib);\n{}\nJSON.stringify(jsc({input}))",
+        include_str!("../ejs/lib.min.js"),
+        include_str!("../ejs/core.min.js")
+    );
+    let output: String = ctx.with(|ctx| {
+        ctx.eval(script).map_err(|_| {
+            DeobfError::Other(
+                ctx.catch()
+                    .as_exception()
+                    .map(|e| e.to_string())
+                    .unwrap_or_else(|| "EJS execution failed".into())
+                    .into(),
+            )
+        })
+    })?;
+    let output: serde_json::Value =
+        serde_json::from_str(&output).map_err(|_| DeobfError::Extraction("EJS response"))?;
+    let code = output["preprocessed_player"]
+        .as_str()
+        .ok_or(DeobfError::Extraction("EJS player"))?;
+    Ok(format!("var utaSolver = {{n:null,sig:null}};\n(function(_result){{\n{code}\n}})(utaSolver);\nfunction deobf_sig(s){{return utaSolver.sig(s)}}\nfunction deobf_nsig(n){{return utaSolver.n(n)}}"))
+}
+
+// QuickJS contexts stay on one thread. Retain one loaded player across request
+// threads; no account material is passed to this worker. The channel is bounded.
+struct SolverJob {
+    data: std::sync::Arc<DeobfData>,
+    function: Option<(&'static str, String)>,
+    reply: std::sync::mpsc::Sender<Result<String, String>>,
+}
+
+fn solver_worker() -> &'static Result<std::sync::mpsc::SyncSender<SolverJob>, String> {
+    static WORKER: std::sync::OnceLock<Result<std::sync::mpsc::SyncSender<SolverJob>, String>> =
+        std::sync::OnceLock::new();
+    WORKER.get_or_init(|| {
+        let (send, receive) = std::sync::mpsc::sync_channel::<SolverJob>(16);
+        std::thread::Builder::new()
+            .name("uta-player-js".into())
+            .stack_size(16 * 1024 * 1024)
+            .spawn(move || {
+                let mut loaded: Option<(std::sync::Arc<DeobfData>, Runtime, Context)> = None;
+                while let Ok(job) = receive.recv() {
+                    let result = (|| -> Result<String, DeobfError> {
+                        let same = loaded.as_ref().is_some_and(|(data, _, _)| {
+                            std::sync::Arc::ptr_eq(data, &job.data) || **data == *job.data
+                        });
+                        if !same {
+                            loaded = None;
+                            let rt = limited_runtime(5)?;
+                            let ctx = Context::full(&rt)?;
+                            ctx.with(|ctx| {
+                                for source in [&job.data.sig_fn, &job.data.nsig_fn] {
+                                    let mut opts = rquickjs::context::EvalOptions::default();
+                                    opts.strict = false;
+                                    ctx.eval_with_options::<(), _>(source.as_bytes(), opts)?;
+                                }
+                                Ok::<_, rquickjs::Error>(())
+                            })?;
+                            loaded = Some((job.data.clone(), rt, ctx));
+                        }
+                        let (data, rt, ctx) = loaded.as_mut().unwrap();
+                        *data = job.data;
+                        let deadline =
+                            std::time::Instant::now() + std::time::Duration::from_secs(5);
+                        rt.set_interrupt_handler(Some(Box::new(move || {
+                            std::time::Instant::now() > deadline
+                        })));
+                        match job.function {
+                            Some((function, input)) => {
+                                Ok(ctx.with(|ctx| call_fn(&ctx, function, &input))?)
+                            }
+                            None => Ok(String::new()),
+                        }
+                    })();
+                    let failed = result.is_err();
+                    // Never propagate JavaScript exception text into application logs.
+                    let _ = job
+                        .reply
+                        .send(result.map_err(|_| "Player JavaScript failed".to_owned()));
+                    if failed {
+                        loaded = None;
+                    }
+                }
+            })
+            .map_err(|_| "Could not start player solver".to_owned())?;
+        Ok(send)
+    })
+}
+
 impl Deobfuscator {
-    /// Instantiate a new deobfuscator with the given data
+    /// Instantiate or reuse the current player on the retained solver thread.
     pub fn new(data: &DeobfData) -> Result<Self, DeobfError> {
-        let rt = Runtime::new()?;
-        let ctx = Context::full(&rt)?;
-        ctx.with(|ctx| {
-            let mut opts = rquickjs::context::EvalOptions::default();
-            opts.strict = false;
-            ctx.eval_with_options::<(), _>(data.sig_fn.as_bytes(), opts)?;
-            let mut opts = rquickjs::context::EvalOptions::default();
-            opts.strict = false;
-            ctx.eval_with_options::<(), _>(data.nsig_fn.as_bytes(), opts)
-        })?;
-        Ok(Self { ctx })
+        let solver = Self {
+            data: std::sync::Arc::new(data.clone()),
+        };
+        solver.run(None)?;
+        Ok(solver)
     }
 
-    /// Deobfuscate the `s` parameter from the `signature_cipher` field
+    fn run(&self, function: Option<(&'static str, String)>) -> Result<String, DeobfError> {
+        let worker = solver_worker()
+            .as_ref()
+            .map_err(|_| DeobfError::Other("Player solver unavailable".into()))?;
+        let (reply, receive) = std::sync::mpsc::channel();
+        worker
+            .try_send(SolverJob {
+                data: self.data.clone(),
+                function,
+                reply,
+            })
+            .map_err(|_| DeobfError::Other("Player solver stopped".into()))?;
+        receive
+            .recv_timeout(std::time::Duration::from_secs(15))
+            .map_err(|_| DeobfError::Other("Player solver timed out".into()))?
+            .map_err(|_| DeobfError::Other("Player JavaScript failed".into()))
+    }
+
+    /// Deobfuscate the signature parameter without reparsing the player.
     pub fn deobfuscate_sig(&self, sig: &str) -> Result<String, DeobfError> {
-        let res = self
-            .ctx
-            .with(|ctx| call_fn(&ctx, DEOBF_SIG_FUNC_NAME, sig))?;
-        tracing::trace!("deobf sig: {sig} -> {res}");
-        Ok(res)
+        self.run(Some((DEOBF_SIG_FUNC_NAME, sig.to_owned())))
     }
 
-    /// Deobfuscate the `n` stream URL parameter to circumvent throttling
+    /// Deobfuscate the throttling parameter without reparsing the player.
     pub fn deobfuscate_nsig(&self, nsig: &str) -> Result<String, DeobfError> {
-        let res = self
-            .ctx
-            .with(|ctx| call_fn(&ctx, DEOBF_NSIG_FUNC_NAME, nsig))?;
-        tracing::trace!("deobf nsig: {nsig} -> {res}");
+        let res = self.run(Some((DEOBF_NSIG_FUNC_NAME, nsig.to_owned())))?;
         if res.starts_with("enhanced_except_") || res.ends_with(nsig) {
             return Err(DeobfError::Other("nsig fn returned an exception".into()));
         }

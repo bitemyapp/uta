@@ -725,6 +725,32 @@ def collections(items, kind):
     return [row for item in items or [] if (row := collection(item, kind))["id"]]
 
 
+def account_extractor(authuser):
+    """Keep yt-dlp's bootstrap and player requests on the saved Google account."""
+    from yt_dlp.extractor.youtube import YoutubeIE
+    if not re.fullmatch(r"[0-9]{1,3}", authuser):
+        raise UserError("Reconnect your account to refresh its account selection.")
+
+    class SelectedAccount(YoutubeIE):
+        @classmethod
+        def ie_key(cls):
+            return "Youtube"
+
+        def _download_webpage(self, url, *args, **kwargs):
+            if isinstance(url, str) and youtube_host(urlsplit(url).hostname or ""):
+                kwargs["query"] = {**(kwargs.get("query") or {}), "authuser": authuser}
+            return super()._download_webpage(url, *args, **kwargs)
+
+        @staticmethod
+        def _extract_session_index(*data):
+            actual = YoutubeIE._extract_session_index(*data)
+            if actual is not None and actual != int(authuser):
+                raise UserError("YouTube selected a different account. Reconnect your account.")
+            return int(authuser)
+
+    return SelectedAccount()
+
+
 def resolve(video_id, saved):
     if not VIDEO_ID.fullmatch(video_id):
         raise UserError("This song has an invalid YouTube ID.")
@@ -733,13 +759,15 @@ def resolve(video_id, saved):
     if jar is not None:
         auth_headers(jar)  # Reject an expired session before any anonymous fallback.
     options = {
-        "format": "bestaudio/best", "quiet": True, "no_warnings": True,
+        "format": "bestaudio/best",
+        "extractor_args": {"youtube": {"player_client": ["web_music"]}} if saved else {}, "quiet": True, "no_warnings": True,
         "logger": Quiet(), "skip_download": True, "noplaylist": True,
         "socket_timeout": 20, "retries": 1, "extractor_retries": 1,
         "cachedir": False, "js_runtimes": {"deno": {}},
     }
     with YoutubeDL(options) as downloader:
         if saved:
+            downloader.add_info_extractor(account_extractor(str(saved.get("authuser", "0"))))
             # The same session used for the library MUST reach the player API.
             for cookie in jar:
                 downloader.cookiejar.set_cookie(cookie)
@@ -753,7 +781,8 @@ def resolve(video_id, saved):
                if k.lower() in allowed and isinstance(v, str) and "\n" not in v and "\r" not in v}
     return {"stream": {"url": stream_url, "headers": headers,
                        "codec": info.get("acodec") or "audio", "bitrate": info.get("abr") or 0,
-                       "authenticated": bool(saved)}}
+                       "authenticated": bool(saved), "format_id": str(info.get("format_id", "")),
+                       "client": "yt-dlp"}}
 
 
 def handle(request):
@@ -788,6 +817,16 @@ def handle(request):
     saved = saved_session(required=True) if request.get("authenticated") else None
     if op in {"liked", "playlists", "albums", "history", "rate"} and not saved:
         raise UserError("Connect your YouTube account to use your library.")
+    if op == "native_session":
+        if not saved:
+            raise UserError("Connect your account before authenticated playback.")
+        jar = decode_cookies(saved["cookies"])
+        authuser = str(saved.get("authuser", "0"))
+        if not re.fullmatch(r"[0-9]{1,3}", authuser):
+            raise UserError("Reconnect your account to refresh its account selection.")
+        headers = auth_headers(jar, authuser)
+        expiry = min([int(time.time()) + 1800] + [c.expires for c in jar if c.expires])
+        return {"credentials": {"cookie": headers["cookie"], "authuser": authuser, "expires": expiry}}
     if op == "resolve":
         return resolve(request.get("id", ""), saved)
     api = music(saved)

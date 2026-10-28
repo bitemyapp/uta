@@ -909,3 +909,27 @@ fn skipped_native_stream_cannot_trigger_fallback_for_the_next_track() {
     assert_eq!(h.program().queue.current, Some(1));
     assert!(h.program().error.is_none());
 }
+
+#[test]
+fn authenticated_native_transport_failure_keeps_authentication_for_fallback() {
+    let fixture = Arc::new(Fixture {
+        native_resolution: true,
+        connected: true,
+        ..Default::default()
+    });
+    let mut h = Harness::new(Uta::new(fixture.clone(), None, false));
+    search(&mut h);
+    h.send(Msg::Play(0));
+    let generation = h.program().play_generation;
+    h.send(Msg::Player(Event {
+        generation,
+        kind: EventKind::Failed("403".into()),
+    }));
+    let calls = fixture.calls.lock().unwrap();
+    let retries: Vec<_> = calls
+        .iter()
+        .filter(|(r, _)| matches!(r, Request::ResolveFallback { .. }))
+        .collect();
+    assert_eq!(retries.len(), 1);
+    assert!(retries[0].1);
+}

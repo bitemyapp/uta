@@ -8,7 +8,9 @@
 //! - Client ([`rustypipe::client::Rustypipe`](crate::client::RustyPipe))
 //! - Query ([`rustypipe::client::RustypipeQuery`](crate::client::RustyPipeQuery))
 
-mod deobfuscate;
+/// Player signature extraction, exposed for integration checks.
+#[allow(missing_docs)]
+pub mod deobfuscate;
 mod serializer;
 mod util;
 

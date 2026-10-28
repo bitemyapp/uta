@@ -1,5 +1,4 @@
-//! Retained, anonymous RustyPipe adapter. Account requests stay on the established
-//! helper until cookie/account selection and Premium playback have been verified.
+//! Retained anonymous browsing and authenticated WEB_REMIX playback.
 use crate::{
     model::{Collection, Stream, Track},
     service::{Live, Reply, Request, SONG_LIMIT, Service},
@@ -9,11 +8,16 @@ use rustypipe::{
     model::{AlbumItem, ArtistId, TrackItem},
     param::StreamFilter,
 };
-use std::{collections::HashSet, time::Duration};
+use std::{
+    collections::HashSet,
+    sync::{Arc, Mutex},
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 pub struct Native {
     pipe: RustyPipe,
     runtime: tokio::runtime::Runtime,
+    account: Mutex<Option<(Arc<RustyPipe>, u64)>>,
 }
 
 impl Native {
@@ -34,20 +38,97 @@ impl Native {
             .build()
             .map_err(|_| "Could not start native music service")?;
         drop(_guard);
-        Ok(Self { pipe, runtime })
+        Ok(Self {
+            pipe,
+            runtime,
+            account: Mutex::new(None),
+        })
     }
 
     /// No fallback: exposes native failures to the anonymous benchmark.
     pub fn call_native(&self, request: &Request) -> Result<Reply, String> {
+        self.call_native_mode(request, false)
+    }
+
+    /// Strict native resolution for measurements: errors never become helper samples.
+    pub fn call_native_mode(
+        &self,
+        request: &Request,
+        authenticated: bool,
+    ) -> Result<Reply, String> {
+        let account = if authenticated && matches!(request, Request::Resolve { .. }) {
+            Some(self.account()?)
+        } else {
+            None
+        };
         self.runtime.block_on(async {
-            tokio::time::timeout(Duration::from_secs(20), self.request(request))
-                .await
-                .map_err(|_| "Native music request timed out".to_string())?
-                .map_err(|_| "Native music request failed".to_string())
+            tokio::time::timeout(
+                Duration::from_secs(30),
+                self.request(request, account.as_deref()),
+            )
+            .await
+            .map_err(|_| "Native music request timed out".to_string())?
+            .map_err(|_| "Native music request failed".to_string())
         })
     }
 
-    async fn request(&self, request: &Request) -> Result<Reply, rustypipe::error::Error> {
+    fn account(&self) -> Result<Arc<RustyPipe>, String> {
+        // Serialize first load and invalidation. Each request retains an immutable
+        // client so a later account switch cannot mutate an in-flight request.
+        let mut cache = self
+            .account
+            .lock()
+            .map_err(|_| "Account cache unavailable")?;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        if let Some((pipe, expires)) = cache.as_ref()
+            && *expires > now + 30
+        {
+            return Ok(pipe.clone());
+        }
+        *cache = None;
+        let credentials = Live
+            .call(Request::NativeSession, true)?
+            .credentials
+            .ok_or("Could not load the saved account")?;
+        if credentials.expires <= now + 30 {
+            return Err("Your session has expired. Reconnect your account.".into());
+        }
+        let pipe = self.runtime.block_on(async {
+            tokio::time::timeout(Duration::from_secs(30), async {
+                let pipe = RustyPipe::builder()
+                    .no_storage()
+                    .no_reporter()
+                    .no_botguard()
+                    .n_http_retries(0)
+                    .timeout(Duration::from_secs(10))
+                    .build()?;
+                pipe.user_auth_set_cookie_for_account(credentials.cookie.0, credentials.authuser)
+                    .await?;
+                Ok::<_, rustypipe::error::Error>(pipe)
+            })
+            .await
+            .map_err(|_| "Account connection timed out")?
+            .map_err(|_| "Native account connection failed; reconnect your account")
+        })?;
+        let pipe = Arc::new(pipe);
+        *cache = Some((pipe.clone(), credentials.expires));
+        Ok(pipe)
+    }
+
+    fn invalidate_account(&self) {
+        if let Ok(mut cache) = self.account.lock() {
+            *cache = None;
+        }
+    }
+
+    async fn request(
+        &self,
+        request: &Request,
+        account: Option<&RustyPipe>,
+    ) -> Result<Reply, rustypipe::error::Error> {
         let query = self.pipe.query().unauthenticated();
         let mut reply = Reply {
             backend: "rustypipe".into(),
@@ -107,7 +188,16 @@ impl Native {
                 reply.tracks = tracks(found.items.into_iter().take(50));
             }
             Request::Resolve { id } if valid_video_id(id) => {
-                let player = query.player_from_client(id, ClientType::VisionOs).await?;
+                let query = match account {
+                    Some(pipe) => pipe.query().authenticated(),
+                    None => self.pipe.query().unauthenticated(),
+                };
+                let client = if account.is_some() {
+                    ClientType::DesktopMusic
+                } else {
+                    ClientType::VisionOs
+                };
+                let player = query.player_from_client(id, client).await?;
                 let audio = player
                     .select_audio_stream(&StreamFilter::default())
                     .filter(|audio| audio.url.starts_with("https://"))
@@ -124,8 +214,15 @@ impl Native {
                         .and_then(|v| v.as_str().map(str::to_owned))
                         .unwrap_or_else(|| "audio".into()),
                     bitrate: f64::from(audio.average_bitrate) / 1000.0,
-                    authenticated: false,
+                    authenticated: account.is_some(),
                     native: true,
+                    format_id: audio.itag.to_string(),
+                    client: if account.is_some() {
+                        "WEB_REMIX"
+                    } else {
+                        "VISIONOS"
+                    }
+                    .into(),
                 });
             }
             _ => return Err(rustypipe::error::Error::Other("unsupported request".into())),
@@ -134,27 +231,40 @@ impl Native {
     }
 }
 
-fn supported(request: &Request, authenticated: bool) -> bool {
-    !authenticated
-        && match request {
-            Request::Search { filter, .. } => {
-                matches!(filter.as_str(), "songs" | "videos" | "albums")
-            }
-            Request::Collection { .. }
-            | Request::Resolve { .. }
-            | Request::Watch { radio: true, .. } => true,
-            _ => false,
+fn supported(request: &Request, _authenticated: bool) -> bool {
+    match request {
+        Request::Search { filter, .. } => {
+            matches!(filter.as_str(), "songs" | "videos" | "albums")
         }
+        Request::Collection { .. }
+        | Request::Resolve { .. }
+        | Request::Watch { radio: true, .. } => true,
+        _ => false,
+    }
 }
 
 impl Service for Native {
     fn call(&self, request: Request, authenticated: bool) -> Result<Reply, String> {
-        dispatch(
+        let account_action = matches!(
+            request,
+            Request::Status
+                | Request::Connect { .. }
+                | Request::ConnectText { .. }
+                | Request::Disconnect
+        );
+        if account_action {
+            self.invalidate_account();
+        }
+        let result = dispatch(
             request,
             authenticated,
-            |request| self.call_native(request),
+            |request| self.call_native_mode(request, authenticated),
             &Live,
-        )
+        );
+        if account_action {
+            self.invalidate_account();
+        }
+        result
     }
 }
 
@@ -166,12 +276,23 @@ fn dispatch(
 ) -> Result<Reply, String> {
     if supported(&request, authenticated) {
         if let Ok(reply) = native(&request) {
-            return Ok(reply);
+            // Private playlists can appear empty to an anonymous client.
+            if !(authenticated
+                && matches!(request, Request::Collection { .. })
+                && reply.tracks.is_empty())
+            {
+                return Ok(reply);
+            }
         }
         // Never print the upstream error: it may contain URLs/response bodies.
         log::debug!("Native music request failed; trying Python service");
     }
-    fallback.call(request, authenticated)
+    let fallback_auth = authenticated
+        && !matches!(
+            request,
+            Request::Search { .. } | Request::Watch { radio: true, .. }
+        );
+    fallback.call(request, fallback_auth)
 }
 
 fn valid_video_id(id: &str) -> bool {
@@ -250,27 +371,31 @@ mod tests {
     }
 
     #[test]
-    fn connected_requests_never_enter_anonymous_adapter_or_retry_anonymously() {
+    fn public_browsing_uses_native_when_connected_and_auth_failure_stays_authenticated() {
+        assert!(supported(
+            &Request::Search {
+                query: "music".into(),
+                filter: "songs".into()
+            },
+            true
+        ));
         let fallback = Fallback::default();
         for request in [
             Request::Resolve {
                 id: "Az4SnX521pI".into(),
             },
-            Request::Search {
-                query: "music".into(),
-                filter: "songs".into(),
-            },
             Request::Liked,
-            Request::Rate {
-                id: "Az4SnX521pI".into(),
-                like: true,
-            },
         ] {
-            assert!(dispatch(request, true, |_| panic!("must not run native"), &fallback).is_err());
+            assert!(dispatch(request, true, |_| Err("native failed".into()), &fallback).is_err());
         }
-        let calls = fallback.0.lock().unwrap();
-        assert_eq!(calls.len(), 4);
-        assert!(calls.iter().all(|(_, authenticated)| *authenticated));
+        assert!(
+            fallback
+                .0
+                .lock()
+                .unwrap()
+                .iter()
+                .all(|(_, authenticated)| *authenticated)
+        );
     }
 
     #[test]
