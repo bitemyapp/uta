@@ -53,6 +53,10 @@ pub enum Request {
     Resolve {
         id: String,
     },
+    /// Retry a native stream rejected by the audio transport, once via yt-dlp.
+    ResolveFallback {
+        id: String,
+    },
     Rate {
         id: String,
         like: bool,
@@ -62,6 +66,8 @@ pub enum Request {
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct Reply {
+    /// Which adapter answered, for diagnostics and latency measurements.
+    pub backend: String,
     pub connected: bool,
     pub account: String,
     pub message: String,
@@ -94,6 +100,10 @@ pub struct Live;
 
 impl Service for Live {
     fn call(&self, request: Request, authenticated: bool) -> Result<Reply, String> {
+        let request = match request {
+            Request::ResolveFallback { id } => Request::Resolve { id },
+            request => request,
+        };
         let python = std::env::var_os("UTA_PYTHON").unwrap_or_else(|| "python3".into());
         let mut command = Command::new(python);
         crate::process::kill_with_parent(&mut command);
@@ -165,7 +175,10 @@ impl Service for Live {
         if let Some(error) = response.error {
             Err(error)
         } else {
-            Ok(response.data)
+            Ok(Reply {
+                backend: "python".into(),
+                ..response.data
+            })
         }
     }
 }
@@ -204,7 +217,7 @@ impl Service for Demo {
                 }],
                 ..Reply::default()
             }),
-            Request::Resolve { .. } => {
+            Request::Resolve { .. } | Request::ResolveFallback { .. } => {
                 Err("Demo mode shows the interface without playing audio.".into())
             }
             _ => Err("Account actions are unavailable in demo mode.".into()),
@@ -279,5 +292,12 @@ pub fn demo_tracks() -> Vec<Track> {
 }
 
 pub fn live() -> Arc<dyn Service> {
+    #[cfg(feature = "rustypipe")]
+    if std::env::var("UTA_SERVICE").as_deref() != Ok("python") {
+        match crate::native_service::Native::new() {
+            Ok(native) => return Arc::new(native),
+            Err(_) => log::warn!("Native music service unavailable; using Python"),
+        }
+    }
     Arc::new(Live)
 }

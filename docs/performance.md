@@ -28,6 +28,15 @@ scale, font configuration, or machine.
 
 ## Starting a song
 
+The opt-in [RustyPipe trial](rustypipe-integration.md) was measured on
+`wx-workstation` on 27 October 2026. Chosen-track startup improved from **2.19 s
+to 1.11 s median** (three samples each); prefetched Next remained **0.41 s**.
+In a separate interleaved five-track test, anonymous URL resolution improved
+from **1,294 ms to 106 ms**, and resolution plus positive mpv position through
+a null sink from **1,459 ms to 220 ms**. All streams played, sought and passed
+2 MiB reads. See the report for raw data, cold/warm distinctions and limitations.
+The measurements below predate that trial and describe the default Python build.
+
 Measure how long songs take to be heard, against public YouTube without an
 account, at volume 0:
 

@@ -52,6 +52,8 @@ pub struct Stream {
     pub codec: String,
     pub bitrate: f64,
     pub authenticated: bool,
+    /// A native URL can retry through the established extractor if mpv rejects it.
+    pub native: bool,
 }
 
 impl std::fmt::Debug for Stream {

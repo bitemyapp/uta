@@ -8,6 +8,14 @@ key and exports its menus to the shell's menu bar and command palette.
 
 ## Service boundary
 
+The optional `rustypipe` feature adds a retained Rust adapter for anonymous
+filtered search, collections, radio and audio resolution. Account requests,
+Top search and unsupported operations keep the helper below. Extraction errors
+fall back to it; a native URL rejected at playback startup is evicted and retried
+once through yt-dlp with a new player generation. See the
+[integration report](rustypipe-integration.md) for exact routing, the vendored
+VisionOS patch, licensing and measurements. The ordinary build is unchanged.
+
 `service/uta_service.py` accepts a bounded JSON request on stdin and returns
 one JSON response on stdout. Rust embeds this source into the executable.
 The Nix wrapper chooses the Python interpreter and dependencies. The helper

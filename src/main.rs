@@ -7,7 +7,12 @@ use aizome_uta::{
 use std::sync::Arc;
 
 fn main() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn"))
+        // Third-party diagnostics may contain signed URLs or response bodies.
+        .filter_module("rustypipe", log::LevelFilter::Off)
+        .filter_module("reqwest", log::LevelFilter::Off)
+        .filter_module("hyper", log::LevelFilter::Off)
+        .init();
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|a| a == "--help" || a == "-h") {
         println!(

@@ -130,6 +130,12 @@ can hold up to 5,000 songs.
 
 ## Develop and test
 
+An opt-in [RustyPipe integration trial](docs/rustypipe-integration.md) accelerates
+anonymous audio resolution and filtered searches. Run `nix run .#uta-rustypipe`
+or build with `--features rustypipe`. Account operations retain the established
+service; the trial executable includes GPL-3.0-only code. The report includes
+before/after latency numbers and testing instructions.
+
 `nix build` assembles the pinned Aizome and Sidestep sources automatically.
 For Cargo development, the repositories sit beside one another:
 

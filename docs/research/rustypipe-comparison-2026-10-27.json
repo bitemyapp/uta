@@ -1,0 +1,298 @@
+{
+  "host": "wx-workstation",
+  "note": "Retained native client; fresh Python helper per request. Same 40-row limit, queries and video IDs; alternating order. Null audio sink, first positive position, seek to 30 seconds and separate 2 MiB range validation. No credentials.",
+  "rustypipe": "0.11.4 + VisionOs patch",
+  "samples": [
+    {
+      "backend": "python",
+      "ms": 2045.2120300000001,
+      "ok": true,
+      "operation": "search",
+      "round": 0,
+      "rows": 40
+    },
+    {
+      "backend": "python",
+      "bitrate": 127.802,
+      "codec": "opus",
+      "id": "Az4SnX521pI",
+      "media": {
+        "bytes": 2097152,
+        "ok": true,
+        "status": 206
+      },
+      "ms": 1263.421611,
+      "ok": true,
+      "operation": "resolve",
+      "playback": {
+        "playback_ms": 235.257349,
+        "seek_ok": true
+      },
+      "round": 0,
+      "rows": 0,
+      "start_ms": 1498.67896
+    },
+    {
+      "backend": "rustypipe",
+      "ms": 1580.68032,
+      "ok": true,
+      "operation": "search",
+      "round": 0,
+      "rows": 40
+    },
+    {
+      "backend": "rustypipe",
+      "bitrate": 127.802,
+      "codec": "opus",
+      "id": "Az4SnX521pI",
+      "media": {
+        "bytes": 2097152,
+        "ok": true,
+        "status": 206
+      },
+      "ms": 107.298561,
+      "ok": true,
+      "operation": "resolve",
+      "playback": {
+        "playback_ms": 75.603567,
+        "seek_ok": true
+      },
+      "round": 0,
+      "rows": 0,
+      "start_ms": 182.902128
+    },
+    {
+      "backend": "rustypipe",
+      "ms": 1547.767695,
+      "ok": true,
+      "operation": "search",
+      "round": 1,
+      "rows": 39
+    },
+    {
+      "backend": "rustypipe",
+      "bitrate": 142.724,
+      "codec": "opus",
+      "id": "WDe5PzVNSr8",
+      "media": {
+        "bytes": 2097152,
+        "ok": true,
+        "status": 206
+      },
+      "ms": 106.108752,
+      "ok": true,
+      "operation": "resolve",
+      "playback": {
+        "playback_ms": 378.274804,
+        "seek_ok": true
+      },
+      "round": 1,
+      "rows": 0,
+      "start_ms": 484.383556
+    },
+    {
+      "backend": "python",
+      "ms": 1745.011278,
+      "ok": true,
+      "operation": "search",
+      "round": 1,
+      "rows": 40
+    },
+    {
+      "backend": "python",
+      "bitrate": 142.724,
+      "codec": "opus",
+      "id": "WDe5PzVNSr8",
+      "media": {
+        "bytes": 2097152,
+        "ok": true,
+        "status": 206
+      },
+      "ms": 1685.145458,
+      "ok": true,
+      "operation": "resolve",
+      "playback": {
+        "playback_ms": 375.195979,
+        "seek_ok": true
+      },
+      "round": 1,
+      "rows": 0,
+      "start_ms": 2060.341437
+    },
+    {
+      "backend": "python",
+      "ms": 1955.266349,
+      "ok": true,
+      "operation": "search",
+      "round": 2,
+      "rows": 40
+    },
+    {
+      "backend": "python",
+      "bitrate": 139.613,
+      "codec": "opus",
+      "id": "KJEzFvXx3Xw",
+      "media": {
+        "bytes": 2097152,
+        "ok": true,
+        "status": 206
+      },
+      "ms": 1293.877915,
+      "ok": true,
+      "operation": "resolve",
+      "playback": {
+        "playback_ms": 75.398143,
+        "seek_ok": true
+      },
+      "round": 2,
+      "rows": 0,
+      "start_ms": 1369.276058
+    },
+    {
+      "backend": "rustypipe",
+      "ms": 1288.179087,
+      "ok": true,
+      "operation": "search",
+      "round": 2,
+      "rows": 36
+    },
+    {
+      "backend": "rustypipe",
+      "bitrate": 139.613,
+      "codec": "opus",
+      "id": "KJEzFvXx3Xw",
+      "media": {
+        "bytes": 2097152,
+        "ok": true,
+        "status": 206
+      },
+      "ms": 144.030573,
+      "ok": true,
+      "operation": "resolve",
+      "playback": {
+        "playback_ms": 76.343559,
+        "seek_ok": true
+      },
+      "round": 2,
+      "rows": 0,
+      "start_ms": 220.374132
+    },
+    {
+      "backend": "rustypipe",
+      "ms": 1341.575107,
+      "ok": true,
+      "operation": "search",
+      "round": 3,
+      "rows": 37
+    },
+    {
+      "backend": "rustypipe",
+      "bitrate": 144.259,
+      "codec": "opus",
+      "id": "WKU8DJzipW4",
+      "media": {
+        "bytes": 2097152,
+        "ok": true,
+        "status": 206
+      },
+      "ms": 96.217808,
+      "ok": true,
+      "operation": "resolve",
+      "playback": {
+        "playback_ms": 185.76198499999998,
+        "seek_ok": true
+      },
+      "round": 3,
+      "rows": 0,
+      "start_ms": 281.979793
+    },
+    {
+      "backend": "python",
+      "ms": 1744.714427,
+      "ok": true,
+      "operation": "search",
+      "round": 3,
+      "rows": 40
+    },
+    {
+      "backend": "python",
+      "bitrate": 144.259,
+      "codec": "opus",
+      "id": "WKU8DJzipW4",
+      "media": {
+        "bytes": 2097152,
+        "ok": true,
+        "status": 206
+      },
+      "ms": 1383.880426,
+      "ok": true,
+      "operation": "resolve",
+      "playback": {
+        "playback_ms": 74.881806,
+        "seek_ok": true
+      },
+      "round": 3,
+      "rows": 0,
+      "start_ms": 1458.762232
+    },
+    {
+      "backend": "python",
+      "ms": 1955.402716,
+      "ok": true,
+      "operation": "search",
+      "round": 4,
+      "rows": 40
+    },
+    {
+      "backend": "python",
+      "bitrate": 137.29,
+      "codec": "opus",
+      "id": "jy5x7bDYd4o",
+      "media": {
+        "bytes": 2097152,
+        "ok": true,
+        "status": 206
+      },
+      "ms": 1233.755311,
+      "ok": true,
+      "operation": "resolve",
+      "playback": {
+        "playback_ms": 77.03241299999999,
+        "seek_ok": true
+      },
+      "round": 4,
+      "rows": 0,
+      "start_ms": 1310.7877239999998
+    },
+    {
+      "backend": "rustypipe",
+      "ms": 937.275585,
+      "ok": true,
+      "operation": "search",
+      "round": 4,
+      "rows": 40
+    },
+    {
+      "backend": "rustypipe",
+      "bitrate": 137.29,
+      "codec": "opus",
+      "id": "jy5x7bDYd4o",
+      "media": {
+        "bytes": 2097152,
+        "ok": true,
+        "status": 206
+      },
+      "ms": 87.361368,
+      "ok": true,
+      "operation": "resolve",
+      "playback": {
+        "playback_ms": 76.69476999999999,
+        "seek_ok": true
+      },
+      "round": 4,
+      "rows": 0,
+      "start_ms": 164.05613799999998
+    }
+  ],
+  "utc_unix": 1793156889
+}

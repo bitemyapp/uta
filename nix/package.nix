@@ -1,5 +1,5 @@
 { lib, rustPlatform, runCommand, makeWrapper, mpv, deno, dbus, fontconfig, wayland,
-  src, aizome, sidestep, python, fonts }:
+  src, aizome, sidestep, python, fonts, enableRustyPipe ? false }:
 let
   source = runCommand "uta-source" { } ''
     mkdir -p $out
@@ -15,6 +15,7 @@ in rustPlatform.buildRustPackage {
   src = source;
   sourceRoot = "uta-source/uta";
   cargoLock.lockFile = ../Cargo.lock;
+  buildFeatures = lib.optionals enableRustyPipe [ "rustypipe" ];
   nativeBuildInputs = [ makeWrapper python dbus ];
   AIZOME_FONT_DIR = fonts;
   SIDESTEP_BACKEND = "null";
@@ -24,6 +25,9 @@ in rustPlatform.buildRustPackage {
     python3 -m unittest discover -s service/tests -v
   '';
   postInstall = ''
+    ${lib.optionalString enableRustyPipe ''
+      install -Dm644 vendor/rustypipe/LICENSE $out/share/doc/aizome-uta/LICENSE-RustyPipe
+    ''}
     install -Dm644 data/org.aizome.Uta.desktop $out/share/applications/org.aizome.Uta.desktop
     install -Dm644 data/org.aizome.Uta.svg $out/share/icons/hicolor/scalable/apps/org.aizome.Uta.svg
     wrapProgram $out/bin/aizome-uta \
@@ -36,7 +40,7 @@ in rustPlatform.buildRustPackage {
   meta = {
     description = "Native YouTube Music client for Aizome";
     homepage = "https://github.com/bitemyapp/uta";
-    license = with lib.licenses; [ mit asl20 ];
+    license = if enableRustyPipe then lib.licenses.gpl3Only else with lib.licenses; [ mit asl20 ];
     platforms = lib.platforms.linux;
     mainProgram = "aizome-uta";
   };

@@ -1,6 +1,10 @@
 # YouTube and YouTube Music integration research
 
 Investigated 27 October 2026 on `research/youtube-integration-options`.
+This report records the original investigation. The subsequent
+[RustyPipe integration trial](rustypipe-integration.md) now implements and
+benchmarks the anonymous path on this branch; historical statements below about
+unchanged production code and the future handoff describe the earlier state.
 Experiments use public content anonymously. No browser sessions, keyring entries,
 Premium accounts, or account mutations were used. Production code is unchanged.
 

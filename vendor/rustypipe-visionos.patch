@@ -1,0 +1,54 @@
+--- rustypipe-0.11.4/src/client/mod.rs
++++ rustypipe/src/client/mod.rs
+@@ -91,0 +92,2 @@
++    /// Anonymous visionOS client (no JavaScript or PO-token helper required).
++    VisionOs,
+@@ -103 +105 @@
+-        !matches!(self, ClientType::Ios)
++        !matches!(self, ClientType::Ios | ClientType::VisionOs)
+@@ -137,0 +140,4 @@
++    device_make: &'a str,
++    #[serde(skip_serializing_if = "str::is_empty")]
++    user_agent: &'a str,
++    #[serde(skip_serializing_if = "str::is_empty")]
+@@ -142,0 +149 @@
++    #[serde(skip_serializing_if = "str::is_empty")]
+@@ -159,0 +167,2 @@
++            device_make: "",
++            user_agent: "",
+@@ -359,0 +369 @@
++const VISIONOS_UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15";
+@@ -1835,0 +1846 @@
++            ClientType::VisionOs => VISIONOS_UA.into(),
+@@ -2011,0 +2023,20 @@
++            ClientType::VisionOs => YTContext {
++                client: ClientInfo {
++                    client_name: "VISIONOS",
++                    client_version: "1.02".into(),
++                    device_model: "RealityDevice17,1",
++                    device_make: "Apple",
++                    user_agent: VISIONOS_UA,
++                    os_name: "visionOS",
++                    os_version: "26.5.23O471",
++                    visitor_data,
++                    hl,
++                    gl,
++                    time_zone,
++                    utc_offset_minutes,
++                    ..Default::default()
++                },
++                request: None,
++                user: User::default(),
++                third_party: None,
++            },
+@@ -2115,0 +2147,10 @@
++                .header("X-Goog-Api-Format-Version", "2"),
++            ClientType::VisionOs => self
++                .client
++                .inner
++                .http
++                .post(format!(
++                    "{YOUTUBEI_V1_URL}{endpoint}?{DISABLE_PRETTY_PRINT_PARAMETER}"
++                ))
++                .header("X-YouTube-Client-Name", "101")
++                .header("X-YouTube-Client-Version", "1.02")

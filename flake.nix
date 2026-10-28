@@ -22,6 +22,7 @@
           fonts = aizome.packages.${pkgs.stdenv.hostPlatform.system}.fonts;
         };
         default = uta;
+        uta-rustypipe = uta.override { enableRustyPipe = true; };
       });
       apps = each (pkgs: {
         default = { type = "app"; program = "${self.packages.${pkgs.stdenv.hostPlatform.system}.uta}/bin/aizome-uta"; };

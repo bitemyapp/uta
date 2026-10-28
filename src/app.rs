@@ -151,6 +151,7 @@ pub struct Uta {
     pub volume: f64,
     pub playback: Playback,
     pause_on_start: bool,
+    native_stream: bool,
     seek_generation: u64,
     pub position: f64,
     pub duration: f64,
@@ -220,6 +221,7 @@ impl Uta {
             volume: saved.volume,
             playback: Playback::Stopped,
             pause_on_start: false,
+            native_stream: false,
             seek_generation: 0,
             position: 0.0,
             duration: 0.0,
@@ -413,6 +415,7 @@ impl Uta {
         self.play_generation += 1;
         self.control(Control::Stop);
         self.playback = Playback::Stopped;
+        self.native_stream = false;
         self.position = 0.0;
         self.stream_label.clear();
         if self.queue.track().is_none() {
@@ -898,6 +901,7 @@ impl Program for Uta {
                         .ok_or("YouTube returned no audio stream".into())
                 }) {
                 Ok(stream) => {
+                    self.native_stream = stream.native;
                     self.stream_label = stream_description(&stream);
                     // Taken, so a second answer for this song can't load it twice.
                     if let Some(id) = self.resolving.take() {
@@ -944,7 +948,12 @@ impl Program for Uta {
                     };
                     cx.after(LOOKAHEAD, Msg::Prefetch(self.play_generation));
                 }
-                EventKind::Position(position) => self.position = position.max(0.0),
+                EventKind::Position(position) => {
+                    self.position = position.max(0.0);
+                    if self.position > 0.0 {
+                        self.native_stream = false;
+                    }
+                }
                 EventKind::Duration(duration) => self.duration = duration.max(0.0),
                 EventKind::Paused(paused)
                     if matches!(self.playback, Playback::Playing | Playback::Paused) =>
@@ -965,8 +974,25 @@ impl Program for Uta {
                     }
                 }
                 EventKind::Failed(error) => {
-                    self.stop();
-                    self.error = Some(error);
+                    if self.native_stream
+                        && !self.connected
+                        && self.position == 0.0
+                        && let Some(id) = self.queue.track().map(|track| track.id.clone())
+                    {
+                        // Invalidate the failed URL and its player generation before
+                        // retrying. A failed Python stream cannot enter this branch.
+                        self.streams.retain(|(cached, _)| cached != &id);
+                        self.stop();
+                        self.playback = Playback::Resolving;
+                        self.resolving = Some(id.clone());
+                        let generation = self.play_generation;
+                        self.request(Request::ResolveFallback { id }, cx, move |reply| {
+                            Msg::Resolved(generation, reply)
+                        });
+                    } else {
+                        self.stop();
+                        self.error = Some(error);
+                    }
                 }
                 _ => {}
             },
