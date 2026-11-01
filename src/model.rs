@@ -37,6 +37,14 @@ pub struct Collection {
     pub uploader_owned: bool,
 }
 
+/// The sections of one creator's catalog, retained while a tab loads.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct BrowseCatalog {
+    pub tabs: Vec<Collection>,
+    pub selected: usize,
+}
+
 /// Resumable playlist discovery. Contains playlist IDs and counts, never credentials.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct PlaylistScan {

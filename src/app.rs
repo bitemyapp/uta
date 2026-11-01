@@ -1,6 +1,6 @@
 use crate::{
     instance::Instance,
-    model::{Collection, Link, PlaylistScan, Queue, Source, Stream, Track},
+    model::{BrowseCatalog, Collection, Link, PlaylistScan, Queue, Source, Stream, Track},
     player::{Control, Event, EventKind, Player},
     service::{REQUEST_LIMIT, Reply, Request, Secret, Service},
     store::{Saved, Store},
@@ -64,6 +64,7 @@ pub enum Msg {
     Search,
     Select(Option<usize>),
     OpenCollection(usize),
+    BrowseTab(usize),
     BrowseTrack(String, String),
     Back,
     MorePlaylists,
@@ -133,6 +134,7 @@ pub struct Uta {
     pub tracks: Vec<Track>,
     pub collections: Vec<Collection>,
     pub collection: Option<Collection>,
+    pub browse: Option<BrowseCatalog>,
     pub content_note: String,
     pub playlist_scan: Option<PlaylistScan>,
     pub loading_more: bool,
@@ -203,6 +205,7 @@ pub struct Uta {
 struct BrowseLocation {
     page: Page,
     collection: Option<Collection>,
+    browse: Option<BrowseCatalog>,
     query: String,
     filter: usize,
     content: Option<Reply>,
@@ -220,6 +223,7 @@ impl Uta {
             tracks: Vec::new(),
             collections: Vec::new(),
             collection: None,
+            browse: None,
             content_note: String::new(),
             playlist_scan: None,
             loading_more: false,
@@ -389,6 +393,7 @@ impl Uta {
             self.back.push(BrowseLocation {
                 page: self.page,
                 collection: self.collection.clone(),
+                browse: self.browse.clone(),
                 query: self.result_query.clone(),
                 filter: self.filter,
                 content: (!self.busy).then(|| Reply {
@@ -414,6 +419,7 @@ impl Uta {
 
     fn show_page(&mut self, page: Page, cx: &mut Cx<Msg>) {
         self.thumbnails.plan([]);
+        self.browse = None;
         self.content_generation += 1;
         self.page = page;
         self.busy = false;
@@ -541,7 +547,7 @@ impl Uta {
     }
 
     fn search_artwork(&mut self, cx: &mut Cx<Msg>) {
-        if self.page == Page::Search {
+        if self.page == Page::Search || self.browse.is_some() {
             self.thumbnails.plan(
                 self.tracks
                     .iter()
@@ -645,6 +651,7 @@ impl Uta {
         // Streams were asked for under the old account (or none).
         self.streams.clear();
         self.back.clear();
+        self.browse = None;
         self.thumbnails.clear();
         self.playlist_scan = None;
         self.content_note.clear();
@@ -760,6 +767,16 @@ impl Program for Uta {
                     self.open_collection(collection, cx);
                 }
             }
+            Msg::BrowseTab(index) if !self.account_busy => {
+                if let Some(browse) = &mut self.browse
+                    && index != browse.selected
+                    && let Some(tab) = browse.tabs.get(index).cloned()
+                {
+                    browse.selected = index;
+                    self.collection = Some(tab);
+                    self.refresh(cx);
+                }
+            }
             Msg::BrowseTrack(id, kind) if !self.account_busy => {
                 self.open_collection(
                     Collection {
@@ -785,6 +802,7 @@ impl Program for Uta {
                         self.collections = content.collections;
                         self.content_note = content.message;
                         self.playlist_scan = content.playlist_scan;
+                        self.browse = location.browse;
                         self.loading_more = false;
                         self.busy = false;
                         self.searched = true;
@@ -794,6 +812,7 @@ impl Program for Uta {
                         self.search_artwork(cx);
                     } else {
                         self.show_page(location.page, cx);
+                        self.browse = location.browse;
                     }
                 }
             }
@@ -838,6 +857,17 @@ impl Program for Uta {
                         self.playlist_scan = reply.playlist_scan;
                         if !reply.title.is_empty() {
                             self.title = reply.title;
+                        }
+                        if let Some(mut browse) = reply.browse
+                            && let Some(tab) = browse.tabs.first().cloned()
+                        {
+                            // Landing replies describe navigation, not an extra
+                            // page to open. Load the default tab without a Back step.
+                            browse.selected = 0;
+                            self.browse = Some(browse);
+                            self.collection = Some(tab);
+                            self.refresh(cx);
+                            return;
                         }
                         self.search_artwork(cx);
                         if let Some(id) = self.autoplay.take()

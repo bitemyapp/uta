@@ -793,20 +793,27 @@ def browse_creator(api, identity, kind):
             artists = [folder(a["id"], a.get("name") or "Artist", "artist", "Artist")
                        for a in song.get("artists", []) if CHANNEL_ID.fullmatch(a.get("id") or "")
                        and a["id"] not in seen and not seen.add(a["id"])]
+            if len(artists) == 1:
+                return browse_creator(api, artists[0]["id"], "artist")
             return {"title": "Artists", "collections": artists,
                     "message": "" if artists else "YouTube did not identify an artist for this upload. Try Browse uploader."}
         details = api.get_song(identity).get("videoDetails", {})
         identity = details.get("channelId") or ""
         if not CHANNEL_ID.fullmatch(identity):
             raise UserError("YouTube did not identify this track's uploader.")
-        return {"title": details.get("author") or "Uploader", "collections": [
-            folder(identity, "Uploads", "channel_uploads", "Videos from this uploader"),
-            folder(identity, "Playlists", "channel_playlists", "This uploader’s public playlists")]}
+        # Resolve the exact uploader's catalog. When artist and uploader are
+        # the same channel, both actions reach the same Songs-first tabs.
+        result = browse_creator(api, identity, "artist")
+        for tab in result.get("browse", {}).get("tabs", []):
+            if tab["kind"] in {"channel_uploads", "channel_playlists"}:
+                tab["id"] = identity
+        if result.get("title") == "Uploader":
+            result["title"] = details.get("author") or "Uploader"
+        return result
     if not CHANNEL_ID.fullmatch(identity):
         raise UserError("This artist or uploader has an invalid channel ID.")
     if kind == "channel":
-        return {"title": "Uploader", "collections": [folder(identity, "Uploads", "channel_uploads"),
-                                                           folder(identity, "Playlists", "channel_playlists")]}
+        return {"title": "Uploader", "browse": {"tabs": uploader_tabs(identity)}}
     if kind in {"channel_uploads", "channel_playlists"}:
         uploads = kind == "channel_uploads"
         limit = SONGS if uploads else 100
@@ -830,25 +837,34 @@ def browse_creator(api, identity, kind):
         raise
     name = artist.get("name") or "Artist"
     if kind == "artist":
-        return {"title": name, "collections": [
+        sections = [
             folder(identity, title, "artist_" + section, name)
             for section, title in [("songs", "Songs"), ("albums", "Albums"), ("singles", "Singles & EPs"),
                                    ("videos", "Videos"), ("playlists", "Featured playlists")]
-            if artist.get(section)] + [folder(artist.get("channelId") or identity, "Uploader page", "channel", name)]}
+            if section == "songs" or artist.get(section)]
+        uploader = artist.get("channelId") or identity
+        if not CHANNEL_ID.fullmatch(uploader):
+            uploader = identity
+        return {"title": name, "browse": {"tabs": sections + uploader_tabs(uploader)}}
     section = kind.removeprefix("artist_")
     data = artist.get(section) or {}
     items = data.get("results") or []
     if section in {"songs", "videos"}:
         if browse := data.get("browseId"):
             items = api.get_playlist(browse.removeprefix("VL"), limit=SONGS).get("tracks", [])
-        return {"title": f"{name} · {section.title()}", "tracks": tracks(items)[:SONGS]}
+        return {"title": name, "tracks": tracks(items)[:SONGS]}
     if section in {"albums", "singles"}:
         if data.get("params"):
             items = api.get_artist_albums(data.get("browseId") or identity, data["params"], limit=100)
-        return {"title": f"{name} · {section.title()}", "collections": collections(items[:100], "album")}
+        return {"title": name, "collections": collections(items[:100], "album")}
     if section == "playlists":
-        return {"title": f"{name} · Featured playlists", "collections": collections(items, "playlist")}
+        return {"title": name, "collections": collections(items, "playlist")}
     raise UserError("Unknown artist section.")
+
+
+def uploader_tabs(identity):
+    return [folder(identity, "Uploads", "channel_uploads"),
+            folder(identity, "Playlists", "channel_playlists")]
 
 
 def track_playlists(api, identity, saved, scan=None):

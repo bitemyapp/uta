@@ -1,4 +1,4 @@
-use crate::model::{Collection, PlaylistScan, Source, Stream, Track};
+use crate::model::{BrowseCatalog, Collection, PlaylistScan, Source, Stream, Track};
 use serde::{Deserialize, Serialize};
 use std::{
     io::{Read, Write},
@@ -86,6 +86,7 @@ pub struct Reply {
     pub title: String,
     pub tracks: Vec<Track>,
     pub collections: Vec<Collection>,
+    pub browse: Option<BrowseCatalog>,
     pub playlist_scan: Option<PlaylistScan>,
     pub stream: Option<Stream>,
     pub credentials: Option<NativeCredentials>,

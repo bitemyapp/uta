@@ -225,6 +225,23 @@ fn content(app: &Uta) -> Element<Msg> {
         .spacing(16.0)
         .into(),
     ];
+    if let Some(browse) = &app.browse {
+        head.push(
+            scroll(
+                segmented(
+                    browse.tabs.iter().map(|tab| tab.title.clone()),
+                    browse.selected,
+                )
+                .on_select(Msg::BrowseTab)
+                .enabled(!app.account_busy)
+                .id("browse-tabs"),
+            )
+            .horizontal()
+            .width(Fill)
+            .height(30.0)
+            .into(),
+        );
+    }
     match app.page {
         Page::Search => head.push(
             row![
@@ -335,7 +352,7 @@ fn content(app: &Uta) -> Element<Msg> {
                 } else {
                     Icon::Library
                 };
-                let art = if app.page == Page::Search {
+                let art = if app.page == Page::Search || app.browse.is_some() {
                     thumbnail(&c.thumbnail, thumbnails.get(&c.thumbnail), 50.0, glyph)
                 } else {
                     icon(glyph).size(28.0).role(Role::Accent).into()
@@ -372,7 +389,7 @@ fn content(app: &Uta) -> Element<Msg> {
         let connected = app.connected;
         let menu_tracks = tracks.clone();
         let thumbnails = app.thumbnails.images();
-        let search = app.page == Page::Search;
+        let search = app.page == Page::Search || app.browse.is_some();
         virtual_list(tracks.len(), 64.0, move |i| {
             song_row(
                 i,

@@ -6,7 +6,10 @@ use aizome_kit::{
 };
 use aizome_uta::{
     app::{Msg, Page, Playback, Uta},
-    model::{Collection, Link, PlaylistScan, Queue, Repeat, Source, Stream, Track, ago, link},
+    model::{
+        BrowseCatalog, Collection, Link, PlaylistScan, Queue, Repeat, Source, Stream, Track, ago,
+        link,
+    },
     player::{Event, EventKind},
     service::{Reply, Request, Secret, Service, demo_tracks},
     store::{Saved, Store},
@@ -17,6 +20,29 @@ use std::{
 };
 
 const NOW: f64 = 1_793_000_000.0;
+
+fn creator_catalog() -> BrowseCatalog {
+    BrowseCatalog {
+        tabs: [
+            ("Songs", "artist_songs"),
+            ("Albums", "artist_albums"),
+            ("Singles & EPs", "artist_singles"),
+            ("Videos", "artist_videos"),
+            ("Featured playlists", "artist_playlists"),
+            ("Uploads", "channel_uploads"),
+            ("Playlists", "channel_playlists"),
+        ]
+        .into_iter()
+        .map(|(title, kind)| Collection {
+            id: "UCcreator".into(),
+            title: title.into(),
+            kind: kind.into(),
+            ..Collection::default()
+        })
+        .collect(),
+        selected: 0,
+    }
+}
 
 #[derive(Default)]
 struct Fixture {
@@ -120,6 +146,11 @@ impl Service for Fixture {
                 ..Reply::default()
             },
             Request::Search { .. } | Request::Liked | Request::History => Reply {
+                tracks: demo_tracks(),
+                ..Reply::default()
+            },
+            Request::Collection { kind, .. } if kind == "artist_songs" => Reply {
+                title: "Mika & the Pines".into(),
                 tracks: demo_tracks(),
                 ..Reply::default()
             },
@@ -425,16 +456,7 @@ fn native_views_in_both_themes() {
             generation,
             Ok(Reply {
                 title: "Mika & the Pines".into(),
-                collections: ["Songs", "Albums", "Singles & EPs", "Videos"]
-                    .into_iter()
-                    .map(|title| Collection {
-                        id: "UCexample".into(),
-                        title: title.into(),
-                        kind: "artist_songs".into(),
-                        subtitle: "Mika & the Pines".into(),
-                        ..Collection::default()
-                    })
-                    .collect(),
+                browse: Some(creator_catalog()),
                 ..Reply::default()
             }),
         ));
@@ -947,20 +969,62 @@ fn browsing_creators_and_back_preserve_search_and_current_playback() {
     h.send(Msg::Content(
         generation,
         Ok(Reply {
-            title: "Uploader".into(),
+            title: "Mika & the Pines".into(),
+            browse: Some(creator_catalog()),
+            ..Reply::default()
+        }),
+    ));
+    assert_eq!(h.program().browse.as_ref().unwrap().selected, 0);
+    assert_eq!(
+        h.program().collection.as_ref().unwrap().kind,
+        "artist_songs"
+    );
+    assert_eq!(
+        h.program().tracks.len(),
+        6,
+        "Songs opens without another click"
+    );
+    let w = h.window();
+    let inspected = h.inspected(w);
+    let tabs = inspected
+        .iter()
+        .find(|item| item["name"] == "browse-tabs")
+        .unwrap();
+    let album = tabs["parts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|part| part["name"] == "Albums")
+        .unwrap();
+    let rect = album["rect"].as_array().unwrap();
+    h.click(
+        w,
+        Point::new(
+            rect[0].as_f64().unwrap() + rect[2].as_f64().unwrap() / 2.0,
+            rect[1].as_f64().unwrap() + rect[3].as_f64().unwrap() / 2.0,
+        ),
+    );
+    assert_eq!(h.program().browse.as_ref().unwrap().selected, 1);
+    assert!(fixture.requests().iter().any(|r| matches!(r,
+        Request::Collection {id, kind} if id == "UCcreator" && kind == "artist_albums")));
+    let generation = h.program().content_generation;
+    h.send(Msg::Content(
+        generation,
+        Ok(Reply {
             collections: vec![Collection {
-                id: "UCcreator".into(),
-                title: "Uploads".into(),
-                kind: "channel_uploads".into(),
+                id: "MPREbalbum".into(),
+                title: "An album".into(),
+                kind: "album".into(),
                 ..Collection::default()
             }],
             ..Reply::default()
         }),
     ));
     h.send(Msg::OpenCollection(0));
+    assert!(h.program().browse.is_none());
     h.send(Msg::Back);
-    assert_eq!(h.program().title, "Uploader");
-    assert_eq!(h.program().collections[0].kind, "channel_uploads");
+    assert_eq!(h.program().browse.as_ref().unwrap().selected, 1);
+    assert_eq!(h.program().collections[0].id, "MPREbalbum");
     h.send(Msg::Back);
     assert_eq!(h.program().page, Page::Search);
     assert_eq!(h.program().result_query, "Evening listening");
@@ -968,6 +1032,63 @@ fn browsing_creators_and_back_preserve_search_and_current_playback() {
     assert_eq!(h.program().play_generation, play_generation);
     assert_eq!(h.program().queue.track().unwrap().id, playing);
     assert!(!h.program().can_go_back());
+    assert!(h.program().browse.is_none());
+}
+
+#[test]
+fn creator_tabs_reject_stale_replies_and_remain_available_after_failures() {
+    let (mut h, _) = app(true);
+    search(&mut h);
+    h.send(Msg::BrowseTrack(
+        demo_tracks()[0].id.clone(),
+        "track_artists".into(),
+    ));
+    let generation = h.program().content_generation;
+    h.send(Msg::Content(
+        generation,
+        Ok(Reply {
+            title: "Mika & the Pines".into(),
+            browse: Some(creator_catalog()),
+            ..Reply::default()
+        }),
+    ));
+    h.send(Msg::BrowseTab(1));
+    let albums = h.program().content_generation;
+    h.send(Msg::BrowseTab(3));
+    let videos = h.program().content_generation;
+    h.send(Msg::Content(
+        albums,
+        Ok(Reply {
+            title: "Late album reply".into(),
+            ..Reply::default()
+        }),
+    ));
+    assert_eq!(h.program().browse.as_ref().unwrap().selected, 3);
+    assert_ne!(h.program().title, "Late album reply");
+    h.send(Msg::Content(videos, Err("Videos unavailable".into())));
+    assert!(h.find_id(h.window(), "browse-tabs").is_some());
+    h.send(Msg::BrowseTab(0));
+    assert_eq!(h.program().tracks.len(), 6);
+    assert!(h.program().error.is_none());
+    h.send(Msg::BrowseTab(99));
+    assert_eq!(h.program().browse.as_ref().unwrap().selected, 0);
+    h.send(Msg::Back);
+    assert_eq!(h.program().page, Page::Search);
+    assert!(
+        !h.program().can_go_back(),
+        "tab switches do not add Back steps"
+    );
+    h.send(Msg::Content(
+        videos,
+        Ok(Reply {
+            browse: Some(creator_catalog()),
+            ..Reply::default()
+        }),
+    ));
+    assert!(
+        h.program().browse.is_none(),
+        "late catalog replies cannot reopen navigation"
+    );
 }
 
 #[test]

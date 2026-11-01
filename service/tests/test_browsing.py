@@ -44,6 +44,27 @@ class BrowsingTests(unittest.TestCase):
         result = service.browse_creator(api, VIDEO, "track_artists")
         self.assertEqual([r["title"] for r in result["collections"]], ["One", "Two"])
 
+    def test_single_artist_and_matching_uploader_open_the_same_songs_first_catalog(self):
+        api = Mock()
+        api.get_watch_playlist.return_value = {"tracks": [{"videoId": VIDEO,
+            "artists": [{"id": CHANNEL, "name": "Artist"}, {"id": CHANNEL, "name": "Artist"}]}]}
+        api.get_song.return_value = {"videoDetails": {"channelId": CHANNEL, "author": "Artist"}}
+        api.get_artist.return_value = {"name": "Artist", "songs": {"results": []},
+                                      "albums": {"results": []}}
+        artist = service.browse_creator(api, VIDEO, "track_artists")
+        uploader = service.browse_creator(api, VIDEO, "track_uploader")
+        self.assertEqual(artist, uploader)
+        self.assertNotIn("collections", artist)
+        self.assertEqual(artist["browse"]["tabs"][0]["kind"], "artist_songs")
+        self.assertTrue(all(r["id"] == CHANNEL for r in artist["browse"]["tabs"]))
+
+    def test_songs_is_default_even_when_the_artist_only_lists_albums(self):
+        api = Mock()
+        api.get_artist.return_value = {"name": "Artist", "albums": {"results": []}}
+        result = service.browse_creator(api, CHANNEL, "artist")
+        self.assertEqual(result["browse"]["tabs"][0]["kind"], "artist_songs")
+        self.assertEqual(service.browse_creator(api, CHANNEL, "artist_songs")["tracks"], [])
+
     def test_artist_sections_follow_full_catalog_pointers(self):
         api = Mock()
         api.get_artist.return_value = {"name": "Artist", "songs": {"browseId": "VLPLsongs"},
@@ -51,7 +72,8 @@ class BrowsingTests(unittest.TestCase):
         api.get_playlist.return_value = {"tracks": [{"videoId": VIDEO, "title": "Song"}]}
         api.get_artist_albums.return_value = [{"browseId": "MPREb_album", "title": "Album"}]
         landing = service.browse_creator(api, CHANNEL, "artist")
-        self.assertEqual([r["kind"] for r in landing["collections"]], ["artist_songs", "artist_albums", "channel"])
+        self.assertEqual([r["kind"] for r in landing["browse"]["tabs"]],
+                         ["artist_songs", "artist_albums", "channel_uploads", "channel_playlists"])
         self.assertEqual(service.browse_creator(api, CHANNEL, "artist_songs")["tracks"][0]["id"], VIDEO)
         api.get_playlist.assert_called_once_with("PLsongs", limit=1000)
         self.assertEqual(service.browse_creator(api, CHANNEL, "artist_albums")["collections"][0]["id"], "MPREb_album")
@@ -60,10 +82,12 @@ class BrowsingTests(unittest.TestCase):
     def test_uploader_identity_comes_from_video_not_artist_display_name(self):
         api = Mock()
         api.get_song.return_value = {"videoDetails": {"channelId": CHANNEL, "author": "Uploader"}}
+        api.get_artist.side_effect = KeyError("musicImmersiveHeaderRenderer")
         result = service.browse_creator(api, VIDEO, "track_uploader")
         self.assertEqual(result["title"], "Uploader")
-        self.assertEqual([r["id"] for r in result["collections"]], [CHANNEL, CHANNEL])
-        api.get_artist.assert_not_called()
+        self.assertEqual([r["id"] for r in result["browse"]["tabs"]], [CHANNEL, CHANNEL])
+        api.get_artist.assert_called_once_with(CHANNEL)
+        api.get_watch_playlist.assert_not_called()
         with patch.object(service, "channel_catalog", return_value={"channel": "Uploader", "entries": [
             {"id": VIDEO, "title": "Upload", "duration": 23}, None, {"id": "bad"}]}):
             rows = service.browse_creator(api, CHANNEL, "channel_uploads")["tracks"]
@@ -79,6 +103,13 @@ class BrowsingTests(unittest.TestCase):
         self.assertEqual([r["id"] for r in result["collections"]], ["PLuploader", "PLother"])
         self.assertEqual([r["uploader_owned"] for r in result["collections"]], [True, False])
         self.assertIsNone(result["playlist_scan"])
+
+    def test_uploader_tabs_keep_video_channel_even_if_music_returns_another_channel(self):
+        api = Mock()
+        api.get_song.return_value = {"videoDetails": {"channelId": CHANNEL}}
+        api.get_artist.return_value = {"name": "Artist", "channelId": OTHER, "songs": {"results": []}}
+        tabs = service.browse_creator(api, VIDEO, "track_uploader")["browse"]["tabs"]
+        self.assertTrue(all(tab["id"] == CHANNEL for tab in tabs))
 
     def test_batches_continue_without_repeating_discovery_or_checks(self):
         api = Mock()
@@ -132,4 +163,4 @@ class BrowsingTests(unittest.TestCase):
         api = Mock()
         api.get_artist.side_effect = KeyError("musicImmersiveHeaderRenderer")
         result = service.browse_creator(api, CHANNEL, "artist")
-        self.assertEqual([r["kind"] for r in result["collections"]], ["channel_uploads", "channel_playlists"])
+        self.assertEqual([r["kind"] for r in result["browse"]["tabs"]], ["channel_uploads", "channel_playlists"])

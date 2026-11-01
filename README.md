@@ -107,11 +107,17 @@ gapless playback are not implemented.
 Use the **Artists** search tab, right-click a song, or open **Browse…** in the
 player. **Browse artists** follows the track’s artist credits to songs, albums,
 singles, and videos. **Browse uploader** opens the channel that uploaded that
-specific video, with its uploads and public playlists. The Back button returns
+specific video, with its uploads and public playlists. A single artist opens
+directly; multiple artist credits offer a choice. Artist catalogs open on
+**Songs**, with tabs for albums, singles, videos, and available playlists.
+Uploads and the uploader's public playlists are tabs in the same view. When the
+artist and uploader are the same channel, both Browse actions open that catalog.
+Ordinary uploaders without a music catalog open on **Uploads**.
+Switching tabs preserves playback and does not add Back steps. The Back button returns
 to your previous results without interrupting playback.
 
 The menu says **Browse artist** for a single artist and **Browse artists** for
-multiple credits. Search results show album artwork and video previews. Text
+multiple credits. Search and creator catalogs show album artwork and video previews. Text
 appears first; artwork downloads and decodes in the background, four images at
 a time, and fills fixed-size placeholders without moving the rows. A bounded
 in-memory cache avoids fetching the same artwork again when returning to results.
