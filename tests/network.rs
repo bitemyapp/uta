@@ -6,6 +6,42 @@ use aizome_uta::{
 use std::{sync::mpsc, time::Duration};
 
 #[test]
+#[ignore = "requires public YouTube search and thumbnail downloads"]
+fn search_artwork_downloads_for_tracks_and_albums() {
+    let service = service::live();
+    for filter in ["videos", "albums"] {
+        let reply = service
+            .call(
+                Request::Search {
+                    query: if filter == "videos" {
+                        "Noumena DOPAMINEMAXXING"
+                    } else {
+                        "Ella Fitzgerald"
+                    }
+                    .into(),
+                    filter: filter.into(),
+                },
+                false,
+            )
+            .unwrap();
+        let url = if filter == "videos" {
+            let track = reply.tracks.first().expect("video search result");
+            assert!(track.artist_count > 0);
+            &track.thumbnail
+        } else {
+            &reply
+                .collections
+                .first()
+                .expect("album search result")
+                .thumbnail
+        };
+        let image = aizome_uta::artwork::fetch(url).expect("decodable thumbnail");
+        let (width, height) = image.pixel_size();
+        assert!(width > 0 && height > 0);
+    }
+}
+
+#[test]
 #[ignore = "requires network access to YouTube; run in nix develop"]
 fn public_song_search_resolution_and_real_audio_transport() {
     let service = service::live();

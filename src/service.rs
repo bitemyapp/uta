@@ -327,6 +327,7 @@ pub fn demo_tracks() -> Vec<Track> {
         id: format!("demo{:07}", i),
         title: (*title).into(),
         artists: (*artists).into(),
+        artist_count: 1,
         album: (*album).into(),
         duration: *duration,
         ..Track::default()

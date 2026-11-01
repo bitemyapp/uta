@@ -95,7 +95,8 @@ pub enum Msg {
     /// A stream looked up ahead, for the account generation it was asked under.
     Prefetched(u64, String, Result<Reply, String>),
     Player(Event),
-    Artwork(u64, Vec<u8>),
+    Artwork(u64, Option<Image>),
+    Thumbnail(String, Option<Image>),
     Discover,
     Discovered(u64, Result<Reply, String>),
     Poll(u64),
@@ -165,6 +166,7 @@ pub struct Uta {
     pub duration: f64,
     pub stream_label: String,
     pub artwork: Option<Image>,
+    pub thumbnails: crate::artwork::Thumbnails,
     pub rating: HashSet<String>,
     pub demo: bool,
     pub window: WindowKey,
@@ -248,6 +250,7 @@ impl Uta {
             duration: 0.0,
             stream_label: String::new(),
             artwork: None,
+            thumbnails: crate::artwork::Thumbnails::default(),
             rating: HashSet::new(),
             demo,
             window: WindowKey::NONE,
@@ -312,6 +315,7 @@ impl Uta {
             return;
         }
         self.content_generation += 1;
+        self.thumbnails.plan([]);
         if let Request::Search { query, .. } = &request {
             self.result_query = query.clone();
         }
@@ -409,6 +413,7 @@ impl Uta {
     }
 
     fn show_page(&mut self, page: Page, cx: &mut Cx<Msg>) {
+        self.thumbnails.plan([]);
         self.content_generation += 1;
         self.page = page;
         self.busy = false;
@@ -505,7 +510,7 @@ impl Uta {
             return;
         };
         self.duration = track.duration;
-        self.artwork = None;
+        self.artwork = self.thumbnails.images().get(&track.thumbnail).cloned();
         self.error = None;
         self.playback = Playback::Resolving;
         self.pause_on_start = false;
@@ -527,25 +532,36 @@ impl Uta {
         }
         // Otherwise the lookup already under way answers (`Prefetched`).
         cx.set_title(self.window, format!("{} — Uta", track.title));
-        if !self.services.inline() && safe_artwork_url(&track.thumbnail) {
+        if self.artwork.is_none()
+            && !self.services.inline()
+            && crate::artwork::safe_url(&track.thumbnail)
+        {
+            cx.spawn(move || Msg::Artwork(generation, crate::artwork::fetch(&track.thumbnail)));
+        }
+    }
+
+    fn search_artwork(&mut self, cx: &mut Cx<Msg>) {
+        if self.page == Page::Search {
+            self.thumbnails.plan(
+                self.tracks
+                    .iter()
+                    .map(|t| t.thumbnail.clone())
+                    .chain(self.collections.iter().map(|c| c.thumbnail.clone())),
+            );
+        } else {
+            self.thumbnails.plan([]);
+        }
+        self.fetch_thumbnails(cx);
+    }
+
+    fn fetch_thumbnails(&mut self, cx: &mut Cx<Msg>) {
+        if self.services.inline() {
+            return;
+        }
+        while let Some(url) = self.thumbnails.next_request() {
             cx.spawn(move || {
-                let bytes = ureq::Agent::config_builder()
-                    .timeout_global(Some(Duration::from_secs(10)))
-                    .build()
-                    .new_agent()
-                    .get(&track.thumbnail)
-                    .call()
-                    .ok()
-                    .and_then(|mut reply| {
-                        reply
-                            .body_mut()
-                            .with_config()
-                            .limit(4 * 1024 * 1024)
-                            .read_to_vec()
-                            .ok()
-                    })
-                    .unwrap_or_default();
-                Msg::Artwork(generation, bytes)
+                let image = crate::artwork::fetch(&url);
+                Msg::Thumbnail(url, image)
             });
         }
     }
@@ -629,6 +645,7 @@ impl Uta {
         // Streams were asked for under the old account (or none).
         self.streams.clear();
         self.back.clear();
+        self.thumbnails.clear();
         self.playlist_scan = None;
         self.content_note.clear();
         self.loading_more = false;
@@ -774,6 +791,7 @@ impl Program for Uta {
                         self.selected = None;
                         self.autoplay = None;
                         self.error = None;
+                        self.search_artwork(cx);
                     } else {
                         self.show_page(location.page, cx);
                     }
@@ -821,6 +839,7 @@ impl Program for Uta {
                         if !reply.title.is_empty() {
                             self.title = reply.title;
                         }
+                        self.search_artwork(cx);
                         if let Some(id) = self.autoplay.take()
                             && let Some(index) = self.tracks.iter().position(|t| t.id == id)
                         {
@@ -1139,8 +1158,12 @@ impl Program for Uta {
                 }
                 _ => {}
             },
-            Msg::Artwork(generation, bytes) if generation == self.play_generation => {
-                self.artwork = Image::decode(bytes);
+            Msg::Artwork(generation, image) if generation == self.play_generation => {
+                self.artwork = image;
+            }
+            Msg::Thumbnail(url, image) => {
+                self.thumbnails.finish(url, image);
+                self.fetch_thumbnails(cx);
             }
             Msg::Discover => self.discover(cx),
             Msg::Discovered(generation, result) if generation == self.discover_generation => {
@@ -1431,18 +1454,6 @@ impl Drop for Uta {
             let _ = thread.join();
         }
     }
-}
-
-fn safe_artwork_url(url: &str) -> bool {
-    let Some(host) = url
-        .strip_prefix("https://")
-        .and_then(|u| u.split('/').next())
-    else {
-        return false;
-    };
-    ["ytimg.com", "googleusercontent.com", "ggpht.com"]
-        .iter()
-        .any(|domain| host == *domain || host.ends_with(&format!(".{domain}")))
 }
 
 fn stream_description(stream: &Stream) -> String {

@@ -712,15 +712,30 @@ def track(item, album=None):
     return {
         "id": video_id, "title": item.get("title") or "Untitled song",
         "artists": ", ".join(a.get("name", "") for a in artists if isinstance(a, dict)),
+        "artist_count": len({a.get("id") or a.get("name") for a in artists
+                             if isinstance(a, dict) and a.get("name")}),
         "album": name.get("name") or "" if isinstance(name, dict) else str(name),
         "duration": duration(item.get("duration_seconds") or item.get("duration") or item.get("length")),
-        "thumbnail": thumbnails[-1].get("url", "") if isinstance(thumbnails, list) and thumbnails else "",
+        "thumbnail": thumbnail(thumbnails),
         "liked": item.get("likeStatus") == "LIKE",
     }
 
 
 def tracks(items, album=None):
     return [row for item in items or [] if (row := track(item, album)) is not None]
+
+
+def thumbnail(images):
+    """Prefer a modest thumbnail, large enough for a row on a high-DPI display."""
+    if not isinstance(images, list):
+        return ""
+    images = [i for i in images if isinstance(i, dict) and isinstance(i.get("url"), str)]
+    def rank(image):
+        width = image.get("width") or 0
+        if not isinstance(width, (int, float)):
+            width = 0
+        return width - 160 if width >= 160 else 10000 - width
+    return min(reversed(images), key=rank)["url"] if images else ""
 
 
 def collection(item, kind):
@@ -737,7 +752,8 @@ def collection(item, kind):
         browse = item.get("browseId") or ""
         identity = item.get("playlistId") or (browse[2:] if browse.startswith("VL") else None)
     title = item.get("artist") if kind == "artist" else item.get("title")
-    return {"id": identity, "title": title or "Untitled", "subtitle": subtitle, "kind": kind}
+    return {"id": identity, "title": title or "Untitled", "subtitle": subtitle, "kind": kind,
+            "thumbnail": thumbnail(item.get("thumbnails"))}
 
 
 def collections(items, kind):

@@ -447,7 +447,7 @@ fn native_views_in_both_themes() {
         h.send(Msg::Content(generation, Ok(Reply {
             title: "Playlists containing “A window left open”".into(),
             collections: vec![
-                Collection {id: "PLuploader".into(), title: "Small hours".into(), subtitle: "Uploader · Mika & the Pines".into(), kind: "playlist".into(), uploader_owned: true},
+                Collection {id: "PLuploader".into(), title: "Small hours".into(), subtitle: "Uploader · Mika & the Pines".into(), kind: "playlist".into(), uploader_owned: true, ..Collection::default()},
                 Collection {id: "PLother".into(), title: "Evening listening".into(), subtitle: "A listener".into(), kind: "playlist".into(), ..Collection::default()}],
             message: "Checked 6 of 24 discovered playlists (up to 1,000 tracks each). Matches contain this exact video; uploader’s playlists appear first. YouTube does not provide a complete list.".into(),
             playlist_scan: Some(PlaylistScan::default()), ..Reply::default()
@@ -835,6 +835,100 @@ fn connecting_forgets_streams_looked_up_without_the_account() {
     search(&mut h);
     h.send(Msg::Play(1));
     assert_eq!(fixture.resolves(&songs[1].id), [false, true]);
+}
+
+#[test]
+fn artist_labels_use_credits_without_splitting_band_names() {
+    let mut track = Track {
+        artists: "Earth, Wind & Fire".into(),
+        artist_count: 1,
+        ..Track::default()
+    };
+    assert_eq!(track.browse_artist_label(), "Browse artist");
+    track.artist_count = 2;
+    assert_eq!(track.browse_artist_label(), "Browse artists");
+    let old: Track = serde_json::from_str(r#"{"id":"abcdefghijk","artists":"Noumena"}"#).unwrap();
+    assert_eq!(old.browse_artist_label(), "Browse artist");
+}
+
+#[test]
+fn search_is_usable_before_art_arrives_and_late_images_cannot_fill_new_rows() {
+    let (mut h, _) = app(false);
+    search(&mut h);
+    let mut songs = demo_tracks();
+    songs[0].thumbnail = "https://i.ytimg.com/first.jpg".into();
+    songs[1].thumbnail = "https://i.ytimg.com/late.jpg".into();
+    let generation = h.program().content_generation;
+    h.send(Msg::Content(
+        generation,
+        Ok(Reply {
+            tracks: songs.clone(),
+            ..Reply::default()
+        }),
+    ));
+    assert!(!h.program().busy);
+    assert_eq!(h.program().tracks.len(), 6);
+    let window = h.window();
+    let before = h.find_id(window, "play-0").unwrap();
+    assert!(h.program().thumbnails.images().is_empty());
+    let art = Image::from_rgba(2, 1, &[255; 8]).unwrap();
+    h.send(Msg::Thumbnail(
+        songs[0].thumbnail.clone(),
+        Some(art.clone()),
+    ));
+    assert!(
+        h.program()
+            .thumbnails
+            .images()
+            .contains_key(&songs[0].thumbnail)
+    );
+    assert_eq!(h.find_id(window, "play-0"), Some(before));
+    h.send(Msg::Play(0));
+    assert!(
+        h.program().artwork.is_some(),
+        "player reuses the fetched cover"
+    );
+    h.send(Msg::Query("New results".into()));
+    h.send(Msg::Search);
+    h.send(Msg::Thumbnail(songs[1].thumbnail.clone(), Some(art)));
+    assert!(
+        !h.program()
+            .thumbnails
+            .images()
+            .contains_key(&songs[1].thumbnail)
+    );
+    assert_eq!(h.program().result_query, "New results");
+    assert!(h.program().error.is_none());
+}
+
+#[test]
+fn album_search_artwork_populates_after_the_collection_is_visible() {
+    let (mut h, _) = app(false);
+    search(&mut h);
+    let url = "https://lh3.googleusercontent.com/album";
+    let generation = h.program().content_generation;
+    h.send(Msg::Content(
+        generation,
+        Ok(Reply {
+            collections: vec![Collection {
+                id: "MPREb_album".into(),
+                title: "An album".into(),
+                kind: "album".into(),
+                thumbnail: url.into(),
+                ..Collection::default()
+            }],
+            ..Reply::default()
+        }),
+    ));
+    assert_eq!(h.program().collections[0].title, "An album");
+    assert!(!h.program().busy);
+    h.send(Msg::Thumbnail(
+        url.into(),
+        Some(Image::from_rgba(1, 1, &[255; 4]).unwrap()),
+    ));
+    assert!(h.program().thumbnails.images().contains_key(url));
+    h.send(Msg::OpenCollection(0));
+    assert_eq!(h.program().collection.as_ref().unwrap().id, "MPREb_album");
 }
 
 #[test]

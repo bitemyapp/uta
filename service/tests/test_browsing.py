@@ -15,12 +15,25 @@ def scan(ids):
 
 
 class BrowsingTests(unittest.TestCase):
+    def test_artist_count_uses_distinct_credits_and_thumbnails_survive_mapping(self):
+        images = [{"url": "https://i.ytimg.com/tiny", "width": 60},
+                  {"url": "https://i.ytimg.com/row", "width": 300},
+                  {"url": "https://i.ytimg.com/huge", "width": 1920}]
+        row = service.track({"videoId": VIDEO, "artists": [{"id": CHANNEL, "name": "Earth, Wind & Fire"}], "thumbnails": images})
+        self.assertEqual(row["artist_count"], 1)
+        self.assertEqual(row["thumbnail"], images[1]["url"])
+        row = service.track({"videoId": VIDEO, "artists": [{"id": CHANNEL, "name": "One"},
+            {"id": OTHER, "name": "Two"}, {"id": CHANNEL, "name": "One"}]})
+        self.assertEqual(row["artist_count"], 2)
+        album = service.collection({"browseId": "MPREb_album", "title": "Album", "thumbnails": images}, "album")
+        self.assertEqual(album["thumbnail"], images[1]["url"])
+
     def test_artist_search_uses_artist_name_and_browse_id(self):
         api = Mock()
         api.search.return_value = [{"artist": "The artist", "browseId": CHANNEL}]
         with patch.object(service, "music", return_value=api):
             result = service.handle({"op": "search", "query": "artist", "filter": "artists"})
-        self.assertEqual(result["collections"], [service.folder(CHANNEL, "The artist", "artist")])
+        self.assertEqual(result["collections"], [{**service.folder(CHANNEL, "The artist", "artist"), "thumbnail": ""}])
 
     def test_track_artists_use_exact_video_and_preserve_multiple_artists(self):
         api = Mock()

@@ -110,6 +110,12 @@ singles, and videos. **Browse uploader** opens the channel that uploaded that
 specific video, with its uploads and public playlists. The Back button returns
 to your previous results without interrupting playback.
 
+The menu says **Browse artist** for a single artist and **Browse artists** for
+multiple credits. Search results show album artwork and video previews. Text
+appears first; artwork downloads and decodes in the background, four images at
+a time, and fills fixed-size placeholders without moving the rows. A bounded
+in-memory cache avoids fetching the same artwork again when returning to results.
+
 **Playlists containing this track** checks the uploader’s public playlists,
 your saved playlists when connected, and YouTube Music playlist search results.
 Only playlists verified to contain the exact video ID appear. Playlists whose

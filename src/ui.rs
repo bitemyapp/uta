@@ -322,21 +322,26 @@ fn content(app: &Uta) -> Element<Msg> {
             Some(progress_indeterminate().width(180.0).into()),
         )
     } else if !app.collections.is_empty() {
+        let thumbnails = app.thumbnails.images();
         let rows = app
             .collections
             .iter()
             .enumerate()
             .map(|(i, c)| {
+                let glyph = if c.kind == "album" {
+                    Icon::Disc3
+                } else if c.kind == "artist" || c.kind == "channel" {
+                    Icon::UserRound
+                } else {
+                    Icon::Library
+                };
+                let art = if app.page == Page::Search {
+                    thumbnail(&c.thumbnail, thumbnails.get(&c.thumbnail), 50.0, glyph)
+                } else {
+                    icon(glyph).size(28.0).role(Role::Accent).into()
+                };
                 row![
-                    icon(if c.kind == "album" {
-                        Icon::Disc3
-                    } else if c.kind == "artist" || c.kind == "channel" {
-                        Icon::UserRound
-                    } else {
-                        Icon::Library
-                    })
-                    .size(28.0)
-                    .role(Role::Accent),
+                    art,
                     column![
                         text(c.title.clone()).semibold(),
                         text(c.subtitle.clone()).role(Role::Text3).size(12.0)
@@ -366,6 +371,8 @@ fn content(app: &Uta) -> Element<Msg> {
         let enabled = !app.account_busy;
         let connected = app.connected;
         let menu_tracks = tracks.clone();
+        let thumbnails = app.thumbnails.images();
+        let search = app.page == Page::Search;
         virtual_list(tracks.len(), 64.0, move |i| {
             song_row(
                 i,
@@ -373,6 +380,14 @@ fn content(app: &Uta) -> Element<Msg> {
                 playing.as_deref() == Some(tracks[i].id.as_str()),
                 queue,
                 enabled,
+                search.then(|| {
+                    thumbnail(
+                        &tracks[i].thumbnail,
+                        thumbnails.get(&tracks[i].thumbnail),
+                        88.0,
+                        Icon::Disc3,
+                    )
+                }),
             )
         })
         .selected(app.selected)
@@ -451,8 +466,11 @@ fn song_row(
     current: bool,
     queue: bool,
     enabled: bool,
+    artwork: Option<Element<Msg>>,
 ) -> Element<Msg> {
-    let number: Element<Msg> = if current {
+    let number: Element<Msg> = if let Some(artwork) = artwork {
+        artwork
+    } else if current {
         icon(Icon::Volume2).role(Role::Accent).width(24.0).into()
     } else {
         text(format!("{:02}", index + 1))
@@ -508,6 +526,30 @@ fn song_row(
     .into()
 }
 
+fn thumbnail(url: &str, artwork: Option<&Image>, width: f64, glyph: Icon) -> Element<Msg> {
+    use std::hash::{Hash, Hasher};
+    let mut key = std::collections::hash_map::DefaultHasher::new();
+    url.hash(&mut key);
+    let picture: Element<Msg> = match artwork {
+        Some(art) => image(art.clone())
+            .fit(Fit::Contain)
+            .revision(key.finish())
+            .width(width)
+            .height(48.0)
+            .into(),
+        None => container(icon(glyph).size(22.0).role(Role::Text3))
+            .center()
+            .width(width)
+            .height(48.0)
+            .into(),
+    };
+    container(picture)
+        .width(width)
+        .height(48.0)
+        .fill(Tone::Sunk)
+        .into()
+}
+
 /// A song's right-click menu; `queue` is the queue's length on its own page.
 fn song_menu(
     index: usize,
@@ -554,7 +596,7 @@ fn song_menu(
 
 pub(crate) fn browse_menu(mut menu: Menu<Msg>, track: &Track, enabled: bool) -> Menu<Msg> {
     for (label, kind) in [
-        ("Browse artists", "track_artists"),
+        (track.browse_artist_label(), "track_artists"),
         ("Browse uploader", "track_uploader"),
         ("Playlists containing this track", "track_playlists"),
     ] {
@@ -862,7 +904,7 @@ fn player(app: &Uta) -> Element<Msg> {
         buttons.push(
             dropdown(
                 [
-                    "Browse artists",
+                    track.browse_artist_label(),
                     "Browse uploader",
                     "Playlists containing this track",
                 ],
