@@ -236,9 +236,8 @@ fn supported(request: &Request, _authenticated: bool) -> bool {
         Request::Search { filter, .. } => {
             matches!(filter.as_str(), "songs" | "videos" | "albums")
         }
-        Request::Collection { .. }
-        | Request::Resolve { .. }
-        | Request::Watch { radio: true, .. } => true,
+        Request::Collection { kind, .. } => matches!(kind.as_str(), "album" | "playlist"),
+        Request::Resolve { .. } | Request::Watch { radio: true, .. } => true,
         _ => false,
     }
 }
@@ -350,6 +349,7 @@ fn album(item: AlbumItem) -> Collection {
         title: item.name,
         subtitle,
         kind: "album".into(),
+        ..Collection::default()
     }
 }
 
@@ -367,6 +367,34 @@ mod tests {
                 .unwrap()
                 .push((serde_json::to_string(&request).unwrap(), authenticated));
             Err("helper rejected session".into())
+        }
+    }
+
+    #[test]
+    fn creator_and_playlist_discovery_use_the_helper_with_the_selected_account() {
+        for request in [
+            Request::Collection {
+                id: "UCcreator".into(),
+                kind: "artist".into(),
+            },
+            Request::Collection {
+                id: "UCcreator".into(),
+                kind: "channel_playlists".into(),
+            },
+            Request::TrackPlaylists {
+                id: "abcdefghijk".into(),
+                scan: None,
+            },
+        ] {
+            let fallback = Fallback::default();
+            assert!(!supported(&request, true));
+            let _ = dispatch(
+                request,
+                true,
+                |_| panic!("unsupported native call"),
+                &fallback,
+            );
+            assert!(fallback.0.lock().unwrap()[0].1);
         }
     }
 

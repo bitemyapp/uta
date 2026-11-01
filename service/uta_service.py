@@ -730,17 +730,181 @@ def collection(item, kind):
     subtitle = ", ".join(a if isinstance(a, str) else a.get("name", "") for a in authors if isinstance(a, (dict, str)))
     if kind == "album" and item.get("year"):
         subtitle = f"{subtitle} · {item['year']}" if subtitle else str(item["year"])
-    if kind == "album":
+    if kind in {"album", "artist"}:
         identity = item.get("browseId")
     else:
         # Search gives a playlist only its browse ID: "VL" and the playlist's.
         browse = item.get("browseId") or ""
         identity = item.get("playlistId") or (browse[2:] if browse.startswith("VL") else None)
-    return {"id": identity, "title": item.get("title", "Untitled"), "subtitle": subtitle, "kind": kind}
+    title = item.get("artist") if kind == "artist" else item.get("title")
+    return {"id": identity, "title": title or "Untitled", "subtitle": subtitle, "kind": kind}
 
 
 def collections(items, kind):
     return [row for item in items or [] if (row := collection(item, kind))["id"]]
+
+
+CHANNEL_ID = re.compile(r"UC[A-Za-z0-9_-]{22}")
+SCAN_BATCH = 6
+SCAN_CANDIDATES = 300
+
+
+def folder(identity, title, kind, subtitle=""):
+    return {"id": identity, "title": title, "kind": kind, "subtitle": subtitle}
+
+
+def channel_catalog(identity, tab, limit):
+    """Public uploader catalogs; never export session cookies to this extractor."""
+    if not CHANNEL_ID.fullmatch(identity) or tab not in {"videos", "playlists"}:
+        raise UserError("This uploader has an invalid channel ID.")
+    from yt_dlp import YoutubeDL
+    with YoutubeDL({"extract_flat": True, "skip_download": True, "quiet": True,
+                    "no_warnings": True, "logger": Quiet(), "cachedir": False,
+                    "socket_timeout": 10, "retries": 0, "extractor_retries": 0,
+                    "playlistend": limit, "ignoreerrors": False}) as downloader:
+        result = downloader.extract_info(f"https://www.youtube.com/channel/{identity}/{tab}", download=False)
+    return result or {}
+
+
+def browse_creator(api, identity, kind):
+    if kind in {"track_artists", "track_uploader"}:
+        if not VIDEO_ID.fullmatch(identity):
+            raise UserError("This song has an invalid YouTube ID.")
+        if kind == "track_artists":
+            watch = api.get_watch_playlist(videoId=identity, limit=1)
+            song = next((t for t in watch.get("tracks", []) if t.get("videoId") == identity), {})
+            seen = set()
+            artists = [folder(a["id"], a.get("name") or "Artist", "artist", "Artist")
+                       for a in song.get("artists", []) if CHANNEL_ID.fullmatch(a.get("id") or "")
+                       and a["id"] not in seen and not seen.add(a["id"])]
+            return {"title": "Artists", "collections": artists,
+                    "message": "" if artists else "YouTube did not identify an artist for this upload. Try Browse uploader."}
+        details = api.get_song(identity).get("videoDetails", {})
+        identity = details.get("channelId") or ""
+        if not CHANNEL_ID.fullmatch(identity):
+            raise UserError("YouTube did not identify this track's uploader.")
+        return {"title": details.get("author") or "Uploader", "collections": [
+            folder(identity, "Uploads", "channel_uploads", "Videos from this uploader"),
+            folder(identity, "Playlists", "channel_playlists", "This uploader’s public playlists")]}
+    if not CHANNEL_ID.fullmatch(identity):
+        raise UserError("This artist or uploader has an invalid channel ID.")
+    if kind == "channel":
+        return {"title": "Uploader", "collections": [folder(identity, "Uploads", "channel_uploads"),
+                                                           folder(identity, "Playlists", "channel_playlists")]}
+    if kind in {"channel_uploads", "channel_playlists"}:
+        uploads = kind == "channel_uploads"
+        limit = SONGS if uploads else 100
+        result = channel_catalog(identity, "videos" if uploads else "playlists", limit)
+        entries = [e for e in result.get("entries", []) if e]
+        title = result.get("channel") or result.get("uploader") or result.get("title") or "Uploader"
+        if uploads:
+            rows = tracks([{"videoId": e.get("id"), "title": e.get("title"),
+                            "artists": [{"name": e.get("channel") or e.get("uploader") or title}],
+                            "duration": e.get("duration"), "thumbnails": e.get("thumbnails")} for e in entries])
+            return {"title": title, "tracks": rows, "message": f"Up to {limit} public uploads."}
+        return {"title": title, "collections": [folder(e["id"], e.get("title") or "Playlist", "playlist", title)
+                                                 for e in entries if COLLECTION_ID.fullmatch(e.get("id") or "")],
+                "message": "Up to 100 public playlists from this uploader."}
+    try:
+        artist = api.get_artist(identity)
+    except (KeyError, TypeError):
+        # Music's artist credits can point to an ordinary uploader page.
+        if kind == "artist":
+            return browse_creator(api, identity, "channel")
+        raise
+    name = artist.get("name") or "Artist"
+    if kind == "artist":
+        return {"title": name, "collections": [
+            folder(identity, title, "artist_" + section, name)
+            for section, title in [("songs", "Songs"), ("albums", "Albums"), ("singles", "Singles & EPs"),
+                                   ("videos", "Videos"), ("playlists", "Featured playlists")]
+            if artist.get(section)] + [folder(artist.get("channelId") or identity, "Uploader page", "channel", name)]}
+    section = kind.removeprefix("artist_")
+    data = artist.get(section) or {}
+    items = data.get("results") or []
+    if section in {"songs", "videos"}:
+        if browse := data.get("browseId"):
+            items = api.get_playlist(browse.removeprefix("VL"), limit=SONGS).get("tracks", [])
+        return {"title": f"{name} · {section.title()}", "tracks": tracks(items)[:SONGS]}
+    if section in {"albums", "singles"}:
+        if data.get("params"):
+            items = api.get_artist_albums(data.get("browseId") or identity, data["params"], limit=100)
+        return {"title": f"{name} · {section.title()}", "collections": collections(items[:100], "album")}
+    if section == "playlists":
+        return {"title": f"{name} · Featured playlists", "collections": collections(items, "playlist")}
+    raise UserError("Unknown artist section.")
+
+
+def track_playlists(api, identity, saved, scan=None):
+    """Discover candidates, then verify exact video membership in small batches.
+
+    YouTube has no exhaustive reverse-playlist index. A continuation carries only
+    playlist IDs and counts, not cookies, API responses or signed URLs.
+    """
+    if not VIDEO_ID.fullmatch(identity):
+        raise UserError("This song has an invalid YouTube ID.")
+    if scan is None:
+        details = api.get_song(identity).get("videoDetails", {})
+        uploader = details.get("channelId") or ""
+        title = details.get("title") or identity
+        candidates, failed = [], 0
+
+        def discover(fetch):
+            nonlocal failed
+            try:
+                for item in fetch():
+                    if not isinstance(item, dict):
+                        continue
+                    pid = item.get("playlistId") or item.get("id") or (item.get("browseId") or "").removeprefix("VL")
+                    if COLLECTION_ID.fullmatch(pid or "") and pid not in candidates:
+                        candidates.append(pid)
+            except Exception:
+                failed += 1
+
+        if CHANNEL_ID.fullmatch(uploader):
+            discover(lambda: channel_catalog(uploader, "playlists", 100).get("entries", []))
+        if saved:
+            discover(lambda: api.get_library_playlists(limit=100)[:100])
+        discover(lambda: api.search(title[:500], filter="playlists", limit=40)[:40])
+        discover(lambda: api.search(identity, filter="playlists", limit=40)[:40])
+        scan = {"video_id": identity, "uploader_id": uploader, "title": title,
+                "candidates": candidates[:SCAN_CANDIDATES], "checked": 0, "unavailable": 0,
+                "incomplete": 0, "discovery_failures": failed}
+    if (not isinstance(scan, dict) or scan.get("video_id") != identity
+            or not isinstance(scan.get("candidates"), list) or len(scan["candidates"]) > SCAN_CANDIDATES
+            or any(not isinstance(pid, str) or not COLLECTION_ID.fullmatch(pid) for pid in scan["candidates"])
+            or any(type(scan.get(k)) is not int or scan[k] < 0 for k in ["checked", "unavailable", "incomplete", "discovery_failures"])
+            or scan["checked"] > len(scan["candidates"])
+            or not isinstance(scan.get("title"), str) or len(scan["title"]) > 1000
+            or not isinstance(scan.get("uploader_id"), str)):
+        raise UserError("This playlist search has expired. Refresh to search again.")
+    rows = []
+    end = min(scan["checked"] + SCAN_BATCH, len(scan["candidates"]))
+    for pid in scan["candidates"][scan["checked"]:end]:
+        try:
+            playlist = api.get_playlist(pid, limit=SONGS)
+            items = (playlist.get("tracks") or [])[:SONGS]
+            if any(t.get("videoId") == identity for t in items):
+                row = collection({**playlist, "playlistId": pid}, "playlist")
+                owner = playlist.get("author") or {}
+                row["uploader_owned"] = bool(scan["uploader_id"] and isinstance(owner, dict)
+                                               and owner.get("id") == scan["uploader_id"])
+                if row["uploader_owned"]:
+                    row["subtitle"] = "Uploader · " + row["subtitle"]
+                rows.append(row)
+            elif len(items) >= SONGS:
+                scan["incomplete"] += 1
+        except Exception:
+            scan["unavailable"] += 1
+    scan["checked"] = end
+    rows.sort(key=lambda r: not r["uploader_owned"])
+    note = (f"Checked {end} of {len(scan['candidates'])} discovered playlists (up to 1,000 tracks each). "
+            "Matches contain this exact video; uploader’s playlists appear first. YouTube does not provide a complete list.")
+    if scan["discovery_failures"] or scan["unavailable"] or scan["incomplete"]:
+        note += (f" {scan['discovery_failures']} sources unavailable; {scan['unavailable']} playlists unreadable; "
+                 f"{scan['incomplete']} large playlists only partly checked.")
+    return {"title": f"Playlists containing “{scan['title']}”", "collections": rows,
+            "message": note, "playlist_scan": scan if end < len(scan["candidates"]) else None}
 
 
 def account_extractor(authuser):
@@ -864,11 +1028,13 @@ def handle(request):
     if op == "resolve":
         return resolve(request.get("id", ""), saved)
     api = music(saved)
+    if op == "track_playlists":
+        return track_playlists(api, request.get("id", ""), saved, request.get("scan"))
     if op == "search":
         query = request.get("query", "").strip()
         search_filter = request.get("filter", "top")
-        if search_filter not in {"top", "songs", "videos", "albums", "playlists"}:
-            raise UserError("Choose top results, songs, videos, albums, or playlists.")
+        if search_filter not in {"top", "songs", "videos", "albums", "playlists", "artists"}:
+            raise UserError("Choose top results, songs, videos, albums, playlists, or artists.")
         if not query or len(query) > 500:
             raise UserError("Enter a search of between 1 and 500 characters.")
         if search_filter == "top":
@@ -882,7 +1048,7 @@ def handle(request):
         results = api.search(query, filter=search_filter, limit=40)[:40]
         if search_filter in {"songs", "videos"}:
             return {"tracks": tracks(results)}
-        return {"collections": collections(results, "album" if search_filter == "albums" else "playlist")}
+        return {"collections": collections(results, {"albums": "album", "artists": "artist"}.get(search_filter, "playlist"))}
     if op == "liked":
         rows = tracks(api.get_liked_songs(limit=SONGS).get("tracks"))[:SONGS]
         for row in rows:
@@ -905,6 +1071,10 @@ def handle(request):
         identity = request.get("id", "")
         if not COLLECTION_ID.fullmatch(identity):
             raise UserError("This collection has an invalid ID.")
+        if request.get("kind") in {"artist", "artist_songs", "artist_albums", "artist_singles", "artist_videos",
+                                    "artist_playlists", "channel", "channel_uploads", "channel_playlists",
+                                    "track_artists", "track_uploader"}:
+            return browse_creator(api, identity, request["kind"])
         if request.get("kind") == "album":
             result = api.get_album(identity)
             return {"title": result.get("title", "Songs"), "tracks": tracks(result.get("tracks"), result)[:SONGS]}

@@ -65,6 +65,12 @@ pub fn view(app: &Uta) -> Element<Msg> {
         space(8.0),
     ]);
     let mut body = vec![toolbar(vec![
+        icon_button(Icon::ArrowLeft)
+            .on_press(Msg::Back)
+            .enabled(app.can_go_back() && !app.account_busy)
+            .tooltip("Back")
+            .id("browse-back")
+            .into(),
         search_field(&app.query)
             .placeholder("Search songs, albums, playlists, or paste a link…")
             .on_change(Msg::Query)
@@ -198,6 +204,10 @@ fn content(app: &Uta) -> Element<Msg> {
         let albums = app.collections.iter().all(|c| c.kind == "album");
         let (one, many) = if albums {
             ("album", "albums")
+        } else if app.collections.iter().all(|c| c.kind == "artist") {
+            ("artist", "artists")
+        } else if app.collections.iter().any(|c| c.kind != "playlist") {
+            ("section", "sections")
         } else {
             ("playlist", "playlists")
         };
@@ -209,7 +219,7 @@ fn content(app: &Uta) -> Element<Msg> {
     };
     let mut head = vec![
         row![
-            text(heading).size(24.0).semibold().width(Fill),
+            text(heading).size(24.0).semibold().wrap().width(Fill),
             text(status).role(Role::Text3)
         ]
         .spacing(16.0)
@@ -219,7 +229,14 @@ fn content(app: &Uta) -> Element<Msg> {
         Page::Search => head.push(
             row![
                 segmented(
-                    ["Top results", "Songs", "Videos", "Albums", "Playlists"],
+                    [
+                        "Top results",
+                        "Songs",
+                        "Videos",
+                        "Albums",
+                        "Playlists",
+                        "Artists"
+                    ],
                     app.filter
                 )
                 .on_select(Msg::Filter),
@@ -275,6 +292,28 @@ fn content(app: &Uta) -> Element<Msg> {
         ),
         _ => {}
     }
+    if !app.content_note.is_empty() {
+        head.push(
+            text(app.content_note.clone())
+                .size(12.0)
+                .role(Role::Text2)
+                .wrap()
+                .into(),
+        );
+    }
+    if app.playlist_scan.is_some() {
+        head.push(
+            button(if app.loading_more {
+                "Checking playlists…"
+            } else {
+                "Check more playlists"
+            })
+            .on_press(Msg::MorePlaylists)
+            .enabled(!app.loading_more && !app.account_busy)
+            .id("more-playlists")
+            .into(),
+        );
+    }
     let body = if app.busy {
         empty(
             Icon::Headphones,
@@ -291,6 +330,8 @@ fn content(app: &Uta) -> Element<Msg> {
                 row![
                     icon(if c.kind == "album" {
                         Icon::Disc3
+                    } else if c.kind == "artist" || c.kind == "channel" {
+                        Icon::UserRound
                     } else {
                         Icon::Library
                     })
@@ -349,6 +390,23 @@ fn content(app: &Uta) -> Element<Msg> {
         .id("songs")
         .height(Fill)
         .into()
+    } else if app
+        .collection
+        .as_ref()
+        .is_some_and(|c| c.kind == "track_playlists")
+        && app.page == Page::Collection
+        && app.error.is_none()
+    {
+        empty(
+            Icon::Library,
+            "No matching playlists found yet",
+            if app.playlist_scan.is_some() {
+                "Check more playlists to continue looking for this track."
+            } else {
+                "No verified matches in the playlists YouTube made discoverable."
+            },
+            None,
+        )
     } else if app.page == Page::Queue {
         empty(
             Icon::List,
@@ -466,6 +524,9 @@ fn song_menu(
     }
     menu = menu
         .item(MenuItem::new("Start Radio", Msg::StartRadio(Some(index))).enabled(enabled))
+        .separator();
+    menu = browse_menu(menu, track, enabled);
+    menu = menu
         .separator()
         .item(
             MenuItem::new(
@@ -487,6 +548,19 @@ fn song_menu(
             )
             .item(MenuItem::new("Move Down", Msg::Move(index, index + 1)).enabled(index + 1 < len))
             .item(MenuItem::new("Remove from Queue", Msg::Remove(index)));
+    }
+    menu
+}
+
+pub(crate) fn browse_menu(mut menu: Menu<Msg>, track: &Track, enabled: bool) -> Menu<Msg> {
+    for (label, kind) in [
+        ("Browse artists", "track_artists"),
+        ("Browse uploader", "track_uploader"),
+        ("Playlists containing this track", "track_playlists"),
+    ] {
+        menu = menu.item(
+            MenuItem::new(label, Msg::BrowseTrack(track.id.clone(), kind.into())).enabled(enabled),
+        );
     }
     menu
 }
@@ -784,6 +858,28 @@ fn player(app: &Uta) -> Element<Msg> {
             .into(),
     ];
     if let Some(track) = track {
+        let id = track.id.clone();
+        buttons.push(
+            dropdown(
+                [
+                    "Browse artists",
+                    "Browse uploader",
+                    "Playlists containing this track",
+                ],
+                None,
+            )
+            .placeholder("Browse…")
+            .on_select(move |index| {
+                Msg::BrowseTrack(
+                    id.clone(),
+                    ["track_artists", "track_uploader", "track_playlists"][index.min(2)].into(),
+                )
+            })
+            .enabled(!app.account_busy)
+            .width(105.0)
+            .id("browse-playing")
+            .into(),
+        );
         buttons.push(
             icon_button(Icon::Heart)
                 .selected(track.liked)

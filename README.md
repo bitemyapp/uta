@@ -102,6 +102,35 @@ unofficial interfaces and playback requirements change, so the service
 dependencies occasionally need updating. Premium offline downloads and
 gapless playback are not implemented.
 
+## Browse artists, uploaders, and playlists containing a track
+
+Use the **Artists** search tab, right-click a song, or open **Browse…** in the
+player. **Browse artists** follows the track’s artist credits to songs, albums,
+singles, and videos. **Browse uploader** opens the channel that uploaded that
+specific video, with its uploads and public playlists. The Back button returns
+to your previous results without interrupting playback.
+
+**Playlists containing this track** checks the uploader’s public playlists,
+your saved playlists when connected, and YouTube Music playlist search results.
+Only playlists verified to contain the exact video ID appear. Playlists whose
+owner ID matches the uploader come first, followed by other people’s playlists.
+Use **Check more playlists** to continue the search; opening a result and going
+Back preserves the results and progress.
+
+YouTube does not expose an exhaustive reverse index of playlists, including
+with Premium. This is a discovery view, not a promise to find every public or
+private playlist. Discovery considers up to 100 uploader playlists, 100 saved
+playlists, and 40 results each for the title and video-ID searches, deduplicated.
+Six candidates are checked per batch, up to 1,000 tracks per playlist. The page
+reports unreadable playlists, partial checks of large playlists, and failed
+discovery sources. Unrelated recommendations and alternate uploads of the same
+recording are not treated as membership matches.
+
+Creator browsing and playlist discovery use the Python helper in both builds.
+Uploader catalogs are public; saved-playlist discovery and membership checks
+use the connected account. Artist album lists and uploader playlist lists show
+up to 100 entries; uploader video lists show up to 1,000 uploads.
+
 ## Keyboard
 
 | Shortcut | Action |
@@ -122,10 +151,10 @@ the queue, Move Up and Move Down. Albums, History, Start Radio, and the
 selected song's actions are in the menus, and so in Aizome's command palette.
 
 Search starts with YouTube Music's top results, songs and videos (mixes and
-uploads are videos, not catalog songs). The Songs, Videos, Albums, and
-Playlists tabs fetch up to 40 matches each, and library playlists and albums
+uploads are videos, not catalog songs). The Songs, Videos, Albums, Playlists,
+and Artists tabs fetch up to 40 matches each, and library playlists and albums
 up to 100 each. Song lists hold up to 1,000 tracks, and radio fetches about 50. Search
-pagination, playlist editing, and uploads are not yet implemented. The queue
+pagination, playlist editing, and uploading music are not yet implemented. The queue
 can hold up to 5,000 songs.
 
 ## Develop and test

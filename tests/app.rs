@@ -6,7 +6,7 @@ use aizome_kit::{
 };
 use aizome_uta::{
     app::{Msg, Page, Playback, Uta},
-    model::{Link, Queue, Repeat, Source, Stream, Track, ago, link},
+    model::{Collection, Link, PlaylistScan, Queue, Repeat, Source, Stream, Track, ago, link},
     player::{Event, EventKind},
     service::{Reply, Request, Secret, Service, demo_tracks},
     store::{Saved, Store},
@@ -416,6 +416,48 @@ fn native_views_in_both_themes() {
             kind: EventKind::Position(72.0),
         }));
         assert_golden(&mut h, w, format!("tests/snapshots/search-{name}.png"), 1.0);
+        h.send(Msg::BrowseTrack(
+            demo_tracks()[1].id.clone(),
+            "track_artists".into(),
+        ));
+        let generation = h.program().content_generation;
+        h.send(Msg::Content(
+            generation,
+            Ok(Reply {
+                title: "Mika & the Pines".into(),
+                collections: ["Songs", "Albums", "Singles & EPs", "Videos"]
+                    .into_iter()
+                    .map(|title| Collection {
+                        id: "UCexample".into(),
+                        title: title.into(),
+                        kind: "artist_songs".into(),
+                        subtitle: "Mika & the Pines".into(),
+                        ..Collection::default()
+                    })
+                    .collect(),
+                ..Reply::default()
+            }),
+        ));
+        assert_golden(&mut h, w, format!("tests/snapshots/artist-{name}.png"), 1.0);
+        h.send(Msg::BrowseTrack(
+            demo_tracks()[1].id.clone(),
+            "track_playlists".into(),
+        ));
+        let generation = h.program().content_generation;
+        h.send(Msg::Content(generation, Ok(Reply {
+            title: "Playlists containing “A window left open”".into(),
+            collections: vec![
+                Collection {id: "PLuploader".into(), title: "Small hours".into(), subtitle: "Uploader · Mika & the Pines".into(), kind: "playlist".into(), uploader_owned: true},
+                Collection {id: "PLother".into(), title: "Evening listening".into(), subtitle: "A listener".into(), kind: "playlist".into(), ..Collection::default()}],
+            message: "Checked 6 of 24 discovered playlists (up to 1,000 tracks each). Matches contain this exact video; uploader’s playlists appear first. YouTube does not provide a complete list.".into(),
+            playlist_scan: Some(PlaylistScan::default()), ..Reply::default()
+        })));
+        assert_golden(
+            &mut h,
+            w,
+            format!("tests/snapshots/track-playlists-{name}.png"),
+            1.0,
+        );
         h.send(Msg::Page(Page::Account));
         assert_golden(
             &mut h,
@@ -793,6 +835,110 @@ fn connecting_forgets_streams_looked_up_without_the_account() {
     search(&mut h);
     h.send(Msg::Play(1));
     assert_eq!(fixture.resolves(&songs[1].id), [false, true]);
+}
+
+#[test]
+fn browsing_creators_and_back_preserve_search_and_current_playback() {
+    let (mut h, fixture) = app(true);
+    search(&mut h);
+    h.send(Msg::Play(0));
+    start(&mut h);
+    let playing = h.program().queue.track().unwrap().id.clone();
+    let play_generation = h.program().play_generation;
+    h.send(Msg::BrowseTrack(playing.clone(), "track_uploader".into()));
+    assert_eq!(h.program().page, Page::Collection);
+    assert!(fixture.requests().iter().any(|r| matches!(r,
+        Request::Collection {id, kind} if id == &playing && kind == "track_uploader")));
+    let generation = h.program().content_generation;
+    h.send(Msg::Content(
+        generation,
+        Ok(Reply {
+            title: "Uploader".into(),
+            collections: vec![Collection {
+                id: "UCcreator".into(),
+                title: "Uploads".into(),
+                kind: "channel_uploads".into(),
+                ..Collection::default()
+            }],
+            ..Reply::default()
+        }),
+    ));
+    h.send(Msg::OpenCollection(0));
+    h.send(Msg::Back);
+    assert_eq!(h.program().title, "Uploader");
+    assert_eq!(h.program().collections[0].kind, "channel_uploads");
+    h.send(Msg::Back);
+    assert_eq!(h.program().page, Page::Search);
+    assert_eq!(h.program().result_query, "Evening listening");
+    assert_eq!(h.program().tracks.len(), 6);
+    assert_eq!(h.program().play_generation, play_generation);
+    assert_eq!(h.program().queue.track().unwrap().id, playing);
+    assert!(!h.program().can_go_back());
+}
+
+#[test]
+fn playlist_batches_preserve_auth_sort_deduplicate_and_ignore_old_pages() {
+    let (mut h, fixture) = app(true);
+    let id = demo_tracks()[0].id.clone();
+    h.send(Msg::BrowseTrack(id.clone(), "track_playlists".into()));
+    let generation = h.program().content_generation;
+    let cursor = PlaylistScan {
+        video_id: id.clone(),
+        candidates: vec!["PLnext".into()],
+        ..PlaylistScan::default()
+    };
+    let other = Collection {
+        id: "PLother".into(),
+        title: "Other".into(),
+        kind: "playlist".into(),
+        ..Collection::default()
+    };
+    let uploader = Collection {
+        id: "PLuploader".into(),
+        title: "Uploader".into(),
+        kind: "playlist".into(),
+        uploader_owned: true,
+        ..Collection::default()
+    };
+    h.send(Msg::Content(
+        generation,
+        Ok(Reply {
+            collections: vec![other.clone()],
+            playlist_scan: Some(cursor.clone()),
+            ..Reply::default()
+        }),
+    ));
+    h.send(Msg::MorePlaylists);
+    assert!(fixture.calls.lock().unwrap().iter().any(|(r, auth)| *auth && matches!(r,
+        Request::TrackPlaylists {id: requested, scan: Some(scan)} if requested == &id && scan.candidates == cursor.candidates)));
+    h.send(Msg::MoreContent(
+        generation,
+        Ok(Reply {
+            collections: vec![other, uploader.clone()],
+            playlist_scan: Some(cursor),
+            message: "Checked 12 playlists".into(),
+            ..Reply::default()
+        }),
+    ));
+    assert_eq!(h.program().collections.len(), 2);
+    assert!(h.program().collections[0].uploader_owned);
+    h.send(Msg::OpenCollection(0));
+    h.send(Msg::Back);
+    assert_eq!(h.program().collections.len(), 2);
+    assert!(h.program().playlist_scan.is_some());
+    assert_eq!(h.program().content_note, "Checked 12 playlists");
+    h.send(Msg::Page(Page::Search));
+    h.send(Msg::MoreContent(
+        generation,
+        Ok(Reply {
+            collections: vec![uploader],
+            ..Reply::default()
+        }),
+    ));
+    assert!(h.program().collections.is_empty());
+    h.send(Msg::Disconnect);
+    assert!(!h.program().can_go_back());
+    assert!(h.program().playlist_scan.is_none());
 }
 
 #[test]

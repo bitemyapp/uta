@@ -20,6 +20,21 @@ pub struct Collection {
     pub title: String,
     pub subtitle: String,
     pub kind: String,
+    /// Verified playlist owner matches the selected video's uploader.
+    pub uploader_owned: bool,
+}
+
+/// Resumable playlist discovery. Contains playlist IDs and counts, never credentials.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct PlaylistScan {
+    pub video_id: String,
+    pub uploader_id: String,
+    pub title: String,
+    pub candidates: Vec<String>,
+    pub checked: usize,
+    pub unavailable: usize,
+    pub incomplete: usize,
+    pub discovery_failures: usize,
 }
 
 /// A browser profile the service found, and whether it holds a YouTube sign-in.
