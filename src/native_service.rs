@@ -236,9 +236,8 @@ fn supported(request: &Request, _authenticated: bool) -> bool {
         Request::Search { filter, .. } => {
             matches!(filter.as_str(), "songs" | "videos" | "albums")
         }
-        Request::Collection { .. }
-        | Request::Resolve { .. }
-        | Request::Watch { radio: true, .. } => true,
+        Request::Collection { kind, .. } => matches!(kind.as_str(), "album" | "playlist"),
+        Request::Resolve { .. } | Request::Watch { radio: true, .. } => true,
         _ => false,
     }
 }
@@ -324,14 +323,20 @@ fn tracks(items: impl IntoIterator<Item = TrackItem>) -> Vec<Track> {
             id: t.id,
             title: t.name,
             artists: artists(&t.artists),
+            artist_count: t
+                .artists
+                .iter()
+                .filter(|a| !a.name.is_empty())
+                .map(|a| {
+                    a.id.as_deref()
+                        .filter(|id| !id.is_empty())
+                        .unwrap_or(&a.name)
+                })
+                .collect::<HashSet<_>>()
+                .len(),
             album: t.album.map(|a| a.name).unwrap_or_default(),
             duration: f64::from(t.duration.unwrap_or_default()),
-            thumbnail: t
-                .cover
-                .into_iter()
-                .max_by_key(|t| t.width)
-                .map(|t| t.url)
-                .unwrap_or_default(),
+            thumbnail: thumbnail(t.cover),
             liked: false,
         })
         .collect()
@@ -350,7 +355,23 @@ fn album(item: AlbumItem) -> Collection {
         title: item.name,
         subtitle,
         kind: "album".into(),
+        thumbnail: thumbnail(item.cover),
+        ..Collection::default()
     }
+}
+
+fn thumbnail(images: Vec<rustypipe::model::Thumbnail>) -> String {
+    images
+        .into_iter()
+        .min_by_key(|t| {
+            if t.width >= 160 {
+                t.width - 160
+            } else {
+                10_000 - t.width
+            }
+        })
+        .map(|t| t.url)
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -367,6 +388,34 @@ mod tests {
                 .unwrap()
                 .push((serde_json::to_string(&request).unwrap(), authenticated));
             Err("helper rejected session".into())
+        }
+    }
+
+    #[test]
+    fn creator_and_playlist_discovery_use_the_helper_with_the_selected_account() {
+        for request in [
+            Request::Collection {
+                id: "UCcreator".into(),
+                kind: "artist".into(),
+            },
+            Request::Collection {
+                id: "UCcreator".into(),
+                kind: "channel_playlists".into(),
+            },
+            Request::TrackPlaylists {
+                id: "abcdefghijk".into(),
+                scan: None,
+            },
+        ] {
+            let fallback = Fallback::default();
+            assert!(!supported(&request, true));
+            let _ = dispatch(
+                request,
+                true,
+                |_| panic!("unsupported native call"),
+                &fallback,
+            );
+            assert!(fallback.0.lock().unwrap()[0].1);
         }
     }
 
@@ -475,6 +524,7 @@ mod tests {
         let mapped = tracks([track.clone(), track, invalid]);
         assert_eq!(mapped.len(), 1);
         assert_eq!(mapped[0].artists, "Artist");
+        assert_eq!(mapped[0].artist_count, 1);
         assert_eq!(mapped[0].album, "Album");
         assert_eq!(mapped[0].duration, 123.0);
         assert_eq!(mapped[0].thumbnail, "https://i.ytimg.com/high.jpg");

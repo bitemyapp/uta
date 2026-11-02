@@ -1,4 +1,4 @@
-use crate::model::{Collection, Source, Stream, Track};
+use crate::model::{BrowseCatalog, Collection, PlaylistScan, Source, Stream, Track};
 use serde::{Deserialize, Serialize};
 use std::{
     io::{Read, Write},
@@ -47,6 +47,10 @@ pub enum Request {
         id: String,
         kind: String,
     },
+    TrackPlaylists {
+        id: String,
+        scan: Option<PlaylistScan>,
+    },
     /// A song's "up next" list, or a radio from it.
     Watch {
         id: String,
@@ -82,6 +86,8 @@ pub struct Reply {
     pub title: String,
     pub tracks: Vec<Track>,
     pub collections: Vec<Collection>,
+    pub browse: Option<BrowseCatalog>,
+    pub playlist_scan: Option<PlaylistScan>,
     pub stream: Option<Stream>,
     pub credentials: Option<NativeCredentials>,
 }
@@ -251,6 +257,7 @@ impl Service for Demo {
                     title: "Evening listening".into(),
                     subtitle: "A quiet place to begin".into(),
                     kind: "playlist".into(),
+                    ..Collection::default()
                 }],
                 ..Reply::default()
             }),
@@ -321,6 +328,7 @@ pub fn demo_tracks() -> Vec<Track> {
         id: format!("demo{:07}", i),
         title: (*title).into(),
         artists: (*artists).into(),
+        artist_count: 1,
         album: (*album).into(),
         duration: *duration,
         ..Track::default()

@@ -6,6 +6,76 @@ use aizome_uta::{
 use std::{sync::mpsc, time::Duration};
 
 #[test]
+#[ignore = "requires public YouTube creator catalogs and the Python helper"]
+fn single_artist_and_uploader_open_the_same_catalog_with_songs_first() {
+    let service = service::live();
+    let mut destinations = Vec::new();
+    for kind in ["track_artists", "track_uploader"] {
+        let reply = service
+            .call(
+                Request::Collection {
+                    id: "L0IcM-WLP98".into(),
+                    kind: kind.into(),
+                },
+                false,
+            )
+            .unwrap();
+        assert!(reply.collections.is_empty(), "no sole-artist chooser");
+        let catalog = reply.browse.expect("creator tabs");
+        assert_eq!(catalog.tabs[0].kind, "artist_songs");
+        destinations.push(
+            catalog
+                .tabs
+                .iter()
+                .map(|tab| (tab.id.clone(), tab.kind.clone()))
+                .collect::<Vec<_>>(),
+        );
+    }
+    assert_eq!(destinations[0], destinations[1]);
+    let (id, kind) = destinations[0][0].clone();
+    let songs = service
+        .call(Request::Collection { id, kind }, false)
+        .unwrap();
+    assert!(!songs.tracks.is_empty(), "default Songs tab has content");
+}
+
+#[test]
+#[ignore = "requires public YouTube search and thumbnail downloads"]
+fn search_artwork_downloads_for_tracks_and_albums() {
+    let service = service::live();
+    for filter in ["videos", "albums"] {
+        let reply = service
+            .call(
+                Request::Search {
+                    query: if filter == "videos" {
+                        "Noumena DOPAMINEMAXXING"
+                    } else {
+                        "Ella Fitzgerald"
+                    }
+                    .into(),
+                    filter: filter.into(),
+                },
+                false,
+            )
+            .unwrap();
+        let url = if filter == "videos" {
+            let track = reply.tracks.first().expect("video search result");
+            assert!(track.artist_count > 0);
+            &track.thumbnail
+        } else {
+            &reply
+                .collections
+                .first()
+                .expect("album search result")
+                .thumbnail
+        };
+        let image = aizome_uta::artwork::fetch(url).expect("decodable thumbnail");
+        let (width, height) = image.pixel_size();
+        assert!(width > 0 && height > 0);
+    }
+}
+
+#[test]
 #[ignore = "requires network access to YouTube; run in nix develop"]
 fn public_song_search_resolution_and_real_audio_transport() {
     let service = service::live();

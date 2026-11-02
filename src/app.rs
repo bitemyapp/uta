@@ -1,6 +1,6 @@
 use crate::{
     instance::Instance,
-    model::{Collection, Link, Queue, Source, Stream, Track},
+    model::{BrowseCatalog, Collection, Link, PlaylistScan, Queue, Source, Stream, Track},
     player::{Control, Event, EventKind, Player},
     service::{REQUEST_LIMIT, Reply, Request, Secret, Service},
     store::{Saved, Store},
@@ -16,7 +16,7 @@ use std::{
 pub const APP_ID: &str = "org.aizome.Uta";
 pub const QUEUE_LIMIT: usize = 5000;
 /// Search's kinds, as the segmented control lists them.
-pub const SEARCH_FILTERS: [&str; 5] = ["top", "songs", "videos", "albums", "playlists"];
+pub const SEARCH_FILTERS: [&str; 6] = ["top", "songs", "videos", "albums", "playlists", "artists"];
 /// While waiting for a sign-in, look this often, for about five minutes.
 const POLL: Duration = Duration::from_secs(4);
 const POLLS: u32 = 75;
@@ -64,6 +64,11 @@ pub enum Msg {
     Search,
     Select(Option<usize>),
     OpenCollection(usize),
+    BrowseTab(usize),
+    BrowseTrack(String, String),
+    Back,
+    MorePlaylists,
+    MoreContent(u64, Result<Reply, String>),
     Play(usize),
     PlaySelected,
     PlayNext(usize),
@@ -91,7 +96,8 @@ pub enum Msg {
     /// A stream looked up ahead, for the account generation it was asked under.
     Prefetched(u64, String, Result<Reply, String>),
     Player(Event),
-    Artwork(u64, Vec<u8>),
+    Artwork(u64, Option<Image>),
+    Thumbnail(String, Option<Image>),
     Discover,
     Discovered(u64, Result<Reply, String>),
     Poll(u64),
@@ -128,6 +134,11 @@ pub struct Uta {
     pub tracks: Vec<Track>,
     pub collections: Vec<Collection>,
     pub collection: Option<Collection>,
+    pub browse: Option<BrowseCatalog>,
+    pub content_note: String,
+    pub playlist_scan: Option<PlaylistScan>,
+    pub loading_more: bool,
+    back: Vec<BrowseLocation>,
     pub selected: Option<usize>,
     pub busy: bool,
     pub searched: bool,
@@ -157,6 +168,7 @@ pub struct Uta {
     pub duration: f64,
     pub stream_label: String,
     pub artwork: Option<Image>,
+    pub thumbnails: crate::artwork::Thumbnails,
     pub rating: HashSet<String>,
     pub demo: bool,
     pub window: WindowKey,
@@ -189,6 +201,16 @@ pub struct Uta {
     save_thread: Option<std::thread::JoinHandle<()>>,
 }
 
+#[derive(Clone)]
+struct BrowseLocation {
+    page: Page,
+    collection: Option<Collection>,
+    browse: Option<BrowseCatalog>,
+    query: String,
+    filter: usize,
+    content: Option<Reply>,
+}
+
 impl Uta {
     pub fn new(services: Arc<dyn Service>, store: Option<Store>, demo: bool) -> Self {
         let saved = store.as_ref().map(Store::load).unwrap_or_default();
@@ -201,6 +223,11 @@ impl Uta {
             tracks: Vec::new(),
             collections: Vec::new(),
             collection: None,
+            browse: None,
+            content_note: String::new(),
+            playlist_scan: None,
+            loading_more: false,
+            back: Vec::new(),
             selected: None,
             busy: false,
             searched: false,
@@ -227,6 +254,7 @@ impl Uta {
             duration: 0.0,
             stream_label: String::new(),
             artwork: None,
+            thumbnails: crate::artwork::Thumbnails::default(),
             rating: HashSet::new(),
             demo,
             window: WindowKey::NONE,
@@ -291,6 +319,7 @@ impl Uta {
             return;
         }
         self.content_generation += 1;
+        self.thumbnails.plan([]);
         if let Request::Search { query, .. } = &request {
             self.result_query = query.clone();
         }
@@ -301,6 +330,9 @@ impl Uta {
         self.selected = None;
         self.tracks.clear();
         self.collections.clear();
+        self.content_note.clear();
+        self.playlist_scan = None;
+        self.loading_more = false;
         self.request(request, cx, move |reply| Msg::Content(generation, reply));
     }
 
@@ -324,7 +356,12 @@ impl Uta {
             Page::History if self.connected => self.load(Request::History, cx),
             Page::Collection => {
                 if let Some(collection) = &self.collection {
-                    let request = if collection.kind == "watch" {
+                    let request = if collection.kind == "track_playlists" {
+                        Request::TrackPlaylists {
+                            id: collection.id.clone(),
+                            scan: None,
+                        }
+                    } else if collection.kind == "watch" {
                         Request::Watch {
                             id: collection.id.clone(),
                             radio: false,
@@ -343,6 +380,46 @@ impl Uta {
     }
 
     fn navigate(&mut self, page: Page, cx: &mut Cx<Msg>) {
+        self.remember_location();
+        self.show_page(page, cx);
+    }
+
+    pub fn can_go_back(&self) -> bool {
+        !self.back.is_empty()
+    }
+
+    fn remember_location(&mut self) {
+        if self.page != Page::Account && (self.searched || self.page == Page::Queue) {
+            self.back.push(BrowseLocation {
+                page: self.page,
+                collection: self.collection.clone(),
+                browse: self.browse.clone(),
+                query: self.result_query.clone(),
+                filter: self.filter,
+                content: (!self.busy).then(|| Reply {
+                    title: self.title.clone(),
+                    tracks: self.tracks.clone(),
+                    collections: self.collections.clone(),
+                    message: self.content_note.clone(),
+                    playlist_scan: self.playlist_scan.clone(),
+                    ..Reply::default()
+                }),
+            });
+            if self.back.len() > 30 {
+                self.back.remove(0);
+            }
+        }
+    }
+
+    fn open_collection(&mut self, collection: Collection, cx: &mut Cx<Msg>) {
+        self.remember_location();
+        self.collection = Some(collection);
+        self.show_page(Page::Collection, cx);
+    }
+
+    fn show_page(&mut self, page: Page, cx: &mut Cx<Msg>) {
+        self.thumbnails.plan([]);
+        self.browse = None;
         self.content_generation += 1;
         self.page = page;
         self.busy = false;
@@ -351,6 +428,9 @@ impl Uta {
         self.autoplay = None;
         self.tracks.clear();
         self.collections.clear();
+        self.content_note.clear();
+        self.playlist_scan = None;
+        self.loading_more = false;
         self.error = None;
         self.title = match page {
             Page::Search => "Search".into(),
@@ -380,18 +460,21 @@ impl Uta {
             Link::Playlist(id) => (id.clone(), "playlist"),
             Link::Album(id) => (id.clone(), "album"),
         };
-        self.collection = Some(Collection {
-            id: id.clone(),
-            title: if kind == "watch" {
-                "Up next"
-            } else {
-                "Opening link…"
-            }
-            .into(),
-            subtitle: String::new(),
-            kind: kind.into(),
-        });
-        self.navigate(Page::Collection, cx);
+        self.open_collection(
+            Collection {
+                id: id.clone(),
+                title: if kind == "watch" {
+                    "Up next"
+                } else {
+                    "Opening link…"
+                }
+                .into(),
+                subtitle: String::new(),
+                kind: kind.into(),
+                ..Collection::default()
+            },
+            cx,
+        );
         if matches!(link, Link::Song(_)) {
             self.autoplay = Some(id);
         }
@@ -433,7 +516,7 @@ impl Uta {
             return;
         };
         self.duration = track.duration;
-        self.artwork = None;
+        self.artwork = self.thumbnails.images().get(&track.thumbnail).cloned();
         self.error = None;
         self.playback = Playback::Resolving;
         self.pause_on_start = false;
@@ -455,25 +538,36 @@ impl Uta {
         }
         // Otherwise the lookup already under way answers (`Prefetched`).
         cx.set_title(self.window, format!("{} — Uta", track.title));
-        if !self.services.inline() && safe_artwork_url(&track.thumbnail) {
+        if self.artwork.is_none()
+            && !self.services.inline()
+            && crate::artwork::safe_url(&track.thumbnail)
+        {
+            cx.spawn(move || Msg::Artwork(generation, crate::artwork::fetch(&track.thumbnail)));
+        }
+    }
+
+    fn search_artwork(&mut self, cx: &mut Cx<Msg>) {
+        if self.page == Page::Search || self.browse.is_some() {
+            self.thumbnails.plan(
+                self.tracks
+                    .iter()
+                    .map(|t| t.thumbnail.clone())
+                    .chain(self.collections.iter().map(|c| c.thumbnail.clone())),
+            );
+        } else {
+            self.thumbnails.plan([]);
+        }
+        self.fetch_thumbnails(cx);
+    }
+
+    fn fetch_thumbnails(&mut self, cx: &mut Cx<Msg>) {
+        if self.services.inline() {
+            return;
+        }
+        while let Some(url) = self.thumbnails.next_request() {
             cx.spawn(move || {
-                let bytes = ureq::Agent::config_builder()
-                    .timeout_global(Some(Duration::from_secs(10)))
-                    .build()
-                    .new_agent()
-                    .get(&track.thumbnail)
-                    .call()
-                    .ok()
-                    .and_then(|mut reply| {
-                        reply
-                            .body_mut()
-                            .with_config()
-                            .limit(4 * 1024 * 1024)
-                            .read_to_vec()
-                            .ok()
-                    })
-                    .unwrap_or_default();
-                Msg::Artwork(generation, bytes)
+                let image = crate::artwork::fetch(&url);
+                Msg::Thumbnail(url, image)
             });
         }
     }
@@ -556,6 +650,12 @@ impl Uta {
         self.signing_in = false;
         // Streams were asked for under the old account (or none).
         self.streams.clear();
+        self.back.clear();
+        self.browse = None;
+        self.thumbnails.clear();
+        self.playlist_scan = None;
+        self.content_note.clear();
+        self.loading_more = false;
         self.prefetching = None;
         self.auth_generation += 1;
         self.content_generation += 1;
@@ -664,8 +764,87 @@ impl Program for Uta {
             Msg::Select(index) => self.selected = index,
             Msg::OpenCollection(index) => {
                 if let Some(collection) = self.collections.get(index).cloned() {
-                    self.collection = Some(collection);
-                    self.navigate(Page::Collection, cx);
+                    self.open_collection(collection, cx);
+                }
+            }
+            Msg::BrowseTab(index) if !self.account_busy => {
+                if let Some(browse) = &mut self.browse
+                    && index != browse.selected
+                    && let Some(tab) = browse.tabs.get(index).cloned()
+                {
+                    browse.selected = index;
+                    self.collection = Some(tab);
+                    self.refresh(cx);
+                }
+            }
+            Msg::BrowseTrack(id, kind) if !self.account_busy => {
+                self.open_collection(
+                    Collection {
+                        id,
+                        title: "Finding music…".into(),
+                        kind,
+                        ..Collection::default()
+                    },
+                    cx,
+                );
+            }
+            Msg::Back if !self.account_busy => {
+                if let Some(location) = self.back.pop() {
+                    self.collection = location.collection;
+                    self.query = location.query;
+                    self.filter = location.filter;
+                    if let Some(content) = location.content {
+                        self.content_generation += 1;
+                        self.page = location.page;
+                        self.result_query = self.query.clone();
+                        self.title = content.title;
+                        self.tracks = content.tracks;
+                        self.collections = content.collections;
+                        self.content_note = content.message;
+                        self.playlist_scan = content.playlist_scan;
+                        self.browse = location.browse;
+                        self.loading_more = false;
+                        self.busy = false;
+                        self.searched = true;
+                        self.selected = None;
+                        self.autoplay = None;
+                        self.error = None;
+                        self.search_artwork(cx);
+                    } else {
+                        self.show_page(location.page, cx);
+                        self.browse = location.browse;
+                    }
+                }
+            }
+            Msg::MorePlaylists if !self.loading_more && !self.busy && !self.account_busy => {
+                if let Some(scan) = self.playlist_scan.clone() {
+                    self.loading_more = true;
+                    self.error = None;
+                    let generation = self.content_generation;
+                    self.request(
+                        Request::TrackPlaylists {
+                            id: scan.video_id.clone(),
+                            scan: Some(scan),
+                        },
+                        cx,
+                        move |reply| Msg::MoreContent(generation, reply),
+                    );
+                }
+            }
+            Msg::MoreContent(generation, result) if generation == self.content_generation => {
+                self.loading_more = false;
+                match result {
+                    Ok(reply) => {
+                        for collection in reply.collections {
+                            if !self.collections.iter().any(|c| c.id == collection.id) {
+                                self.collections.push(collection);
+                            }
+                        }
+                        self.collections.sort_by_key(|c| !c.uploader_owned);
+                        self.content_note = reply.message;
+                        self.playlist_scan = reply.playlist_scan;
+                    }
+                    Err(error) => self.error = Some(error),
                 }
             }
             Msg::Content(generation, result) if generation == self.content_generation => {
@@ -674,9 +853,23 @@ impl Program for Uta {
                     Ok(reply) => {
                         self.tracks = reply.tracks;
                         self.collections = reply.collections;
+                        self.content_note = reply.message;
+                        self.playlist_scan = reply.playlist_scan;
                         if !reply.title.is_empty() {
                             self.title = reply.title;
                         }
+                        if let Some(mut browse) = reply.browse
+                            && let Some(tab) = browse.tabs.first().cloned()
+                        {
+                            // Landing replies describe navigation, not an extra
+                            // page to open. Load the default tab without a Back step.
+                            browse.selected = 0;
+                            self.browse = Some(browse);
+                            self.collection = Some(tab);
+                            self.refresh(cx);
+                            return;
+                        }
+                        self.search_artwork(cx);
                         if let Some(id) = self.autoplay.take()
                             && let Some(index) = self.tracks.iter().position(|t| t.id == id)
                         {
@@ -995,8 +1188,12 @@ impl Program for Uta {
                 }
                 _ => {}
             },
-            Msg::Artwork(generation, bytes) if generation == self.play_generation => {
-                self.artwork = Image::decode(bytes);
+            Msg::Artwork(generation, image) if generation == self.play_generation => {
+                self.artwork = image;
+            }
+            Msg::Thumbnail(url, image) => {
+                self.thumbnails.finish(url, image);
+                self.fetch_thumbnails(cx);
             }
             Msg::Discover => self.discover(cx),
             Msg::Discovered(generation, result) if generation == self.discover_generation => {
@@ -1237,6 +1434,7 @@ impl Program for Uta {
             .item(MenuItem::new("Shuffle Queue", Msg::Shuffle).enabled(self.queue.tracks.len() > 1))
             .item(MenuItem::new(self.queue.repeat.label(), Msg::Repeat));
         if let Some(track) = current {
+            playback = crate::ui::browse_menu(playback.separator(), track, !self.account_busy);
             playback = playback
                 .separator()
                 .item(
@@ -1286,18 +1484,6 @@ impl Drop for Uta {
             let _ = thread.join();
         }
     }
-}
-
-fn safe_artwork_url(url: &str) -> bool {
-    let Some(host) = url
-        .strip_prefix("https://")
-        .and_then(|u| u.split('/').next())
-    else {
-        return false;
-    };
-    ["ytimg.com", "googleusercontent.com", "ggpht.com"]
-        .iter()
-        .any(|domain| host == *domain || host.ends_with(&format!(".{domain}")))
 }
 
 fn stream_description(stream: &Stream) -> String {

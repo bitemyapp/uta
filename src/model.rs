@@ -7,10 +7,22 @@ pub struct Track {
     pub id: String,
     pub title: String,
     pub artists: String,
+    /// Number of distinct artist credits; zero means older/unknown metadata.
+    pub artist_count: usize,
     pub album: String,
     pub duration: f64,
     pub thumbnail: String,
     pub liked: bool,
+}
+
+impl Track {
+    pub fn browse_artist_label(&self) -> &'static str {
+        if self.artist_count > 1 {
+            "Browse artists"
+        } else {
+            "Browse artist"
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -20,6 +32,30 @@ pub struct Collection {
     pub title: String,
     pub subtitle: String,
     pub kind: String,
+    pub thumbnail: String,
+    /// Verified playlist owner matches the selected video's uploader.
+    pub uploader_owned: bool,
+}
+
+/// The sections of one creator's catalog, retained while a tab loads.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct BrowseCatalog {
+    pub tabs: Vec<Collection>,
+    pub selected: usize,
+}
+
+/// Resumable playlist discovery. Contains playlist IDs and counts, never credentials.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct PlaylistScan {
+    pub video_id: String,
+    pub uploader_id: String,
+    pub title: String,
+    pub candidates: Vec<String>,
+    pub checked: usize,
+    pub unavailable: usize,
+    pub incomplete: usize,
+    pub discovery_failures: usize,
 }
 
 /// A browser profile the service found, and whether it holds a YouTube sign-in.

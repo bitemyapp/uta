@@ -1,4 +1,5 @@
 pub mod app;
+pub mod artwork;
 pub mod instance;
 pub mod model;
 pub mod mpris;
