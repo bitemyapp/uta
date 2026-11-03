@@ -863,8 +863,21 @@ fn account(app: &Uta) -> Element<Msg> {
         .into()
 }
 
+/// mpv's volume, in percent.
+const VOLUME: ValueRange = ValueRange::new(0.0, 100.0).unwrap();
+
+/// Where the seek bar reaches: the song's length, and at least a second, so
+/// the bar has room while the length isn't known (0, or NaN). An infinite
+/// length, a stream with no end, leaves nowhere to seek to.
+fn seek_range(duration: f64) -> Option<ValueRange> {
+    ValueRange::new(0.0, duration.max(1.0))
+}
+
 fn player(app: &Uta) -> Element<Msg> {
     let track = app.queue.track();
+    // With nowhere to seek, the bar rests at the start.
+    let seek = seek_range(app.duration);
+    let position = if seek.is_some() { app.position } else { 0.0 };
     let cover: Element<Msg> = if let Some(art) = &app.artwork {
         image(art.clone())
             .fit(Fit::Cover)
@@ -981,7 +994,7 @@ fn player(app: &Uta) -> Element<Msg> {
                 .width(Fill),
                 row(buttons).spacing(8.0),
                 icon(Icon::Volume2).role(Role::Text3),
-                slider(app.volume, 0.0..=100.0)
+                slider(app.volume, VOLUME)
                     .on_change(Msg::Volume)
                     .width(100.0)
                     .label("Volume"),
@@ -993,8 +1006,9 @@ fn player(app: &Uta) -> Element<Msg> {
                     .size(10.0)
                     .role(Role::Text3)
                     .width(42.0),
-                slider(app.position, 0.0..=app.duration.max(1.0))
+                slider(position, seek.unwrap_or(ValueRange::UNIT))
                     .on_change(Msg::Seek)
+                    .enabled(seek.is_some())
                     .width(Fill)
                     .label("Playback position"),
                 text(time(app.duration))
@@ -1011,4 +1025,18 @@ fn player(app: &Uta) -> Element<Msg> {
     .edges(Edge::Line, Sides::TOP)
     .padding([14.0, 20.0])
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_seek_bar_spans_the_song_and_never_an_endless_stream() {
+        assert_eq!(seek_range(248.0), ValueRange::new(0.0, 248.0));
+        for unknown in [0.0, 0.5, f64::NAN] {
+            assert_eq!(seek_range(unknown), Some(ValueRange::UNIT), "{unknown}");
+        }
+        assert_eq!(seek_range(f64::INFINITY), None);
+    }
 }

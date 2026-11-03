@@ -336,6 +336,40 @@ fn eof_advances_once_and_an_old_eof_cannot_skip_a_second_song() {
 }
 
 #[test]
+fn a_stream_with_no_end_has_a_seek_bar_resting_at_the_start() {
+    let (mut h, _) = app(false);
+    let w = h.window();
+    let seek_bar = |h: &Harness<Uta>| {
+        h.semantics(w)
+            .into_iter()
+            .map(|(s, _)| s)
+            .find(|s| s.label.as_deref() == Some("Playback position"))
+            .expect("seek bar")
+    };
+    search(&mut h);
+    h.send(Msg::Play(1));
+    let generation = h.program().play_generation;
+    for kind in [
+        EventKind::Started,
+        EventKind::Position(72.0),
+        EventKind::Duration(f64::INFINITY),
+    ] {
+        h.send(Msg::Player(Event { generation, kind }));
+    }
+    let bar = seek_bar(&h);
+    assert!(bar.disabled);
+    assert_eq!(bar.range, Some((0.0, 1.0, 0.0)));
+    // Once it has a length, it seeks again.
+    h.send(Msg::Player(Event {
+        generation,
+        kind: EventKind::Duration(248.0),
+    }));
+    let bar = seek_bar(&h);
+    assert!(!bar.disabled);
+    assert_eq!(bar.range, Some((0.0, 248.0, 72.0)));
+}
+
+#[test]
 fn skipping_preserves_pause_and_stop_instead_of_starting_audio() {
     let (mut h, _) = app(false);
     search(&mut h);
