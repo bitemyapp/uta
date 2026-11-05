@@ -186,6 +186,15 @@ class ServiceTests(unittest.TestCase):
                 service.handle({"op": "search", "query": "song", "authenticated": True})
             music.assert_not_called()
 
+    def test_liking_and_unliking_rate_the_song_with_ytmusicapis_status(self):
+        from ytmusicapi import LikeStatus
+        api = Mock()
+        with patch.object(service, "saved_session", return_value=session()), patch.object(service, "music", return_value=api):
+            service.handle({"op": "rate", "id": "abcdefghijk", "like": True, "authenticated": True})
+            service.handle({"op": "rate", "id": "abcdefghijk", "like": False, "authenticated": True})
+        self.assertEqual([c.args for c in api.rate_song.call_args_list],
+                         [("abcdefghijk", LikeStatus.LIKE), ("abcdefghijk", LikeStatus.INDIFFERENT)])
+
     def test_failed_connection_preserves_the_previous_saved_session(self):
         vault = Mock()
         api = Mock()

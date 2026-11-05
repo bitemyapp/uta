@@ -1118,7 +1118,7 @@ def handle(request):
         identity = request.get("id", "")
         if not VIDEO_ID.fullmatch(identity):
             raise UserError("This song has an invalid YouTube ID.")
-        from ytmusicapi.models import LikeStatus
+        from ytmusicapi import LikeStatus
         api.rate_song(identity, LikeStatus.LIKE if request.get("like") else LikeStatus.INDIFFERENT)
         return {}
     raise UserError("Unknown music request.")
@@ -1137,7 +1137,9 @@ def main():
         response = {"data": result}
     except UserError as error:
         response = {"error": str(error)}
-    except ImportError:
+    # Only an absent package is a missing dependency; a name a package no
+    # longer exports is an outdated helper, which the generic message says.
+    except ModuleNotFoundError:
         response = {"error": "Music dependencies are missing. Run Uta through its Nix package or development shell."}
     except Exception:
         response = {"error": "YouTube could not complete this request. Check your connection; if signed in, reconnect your account. The service helper may need an update."}
